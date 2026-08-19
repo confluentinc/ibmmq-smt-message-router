@@ -1,0 +1,92 @@
+%% IBM MQ Gateway Pattern - Confluent Cloud Architecture
+%% View this diagram on GitHub or use Mermaid Live Editor: https://mermaid.live/
+
+flowchart TB
+    subgraph mq["IBM MQ Environment (Core Banking System)"]
+        direction TB
+        app1["Banking App 1<br/>(Payments)"]
+        app2["Banking App 2<br/>(Accounts)"]
+        app3["Banking App 3<br/>(Fraud Detection)"]
+
+        q1["PAYMENT.DOMESTIC.QUEUE"]
+        q2["PAYMENT.INTL.QUEUE"]
+        q3["ACCOUNT.TXN.QUEUE"]
+        q4["FRAUD.ALERT.QUEUE"]
+
+        gateway["🚪 GATEWAY.QUEUE<br/>(Aggregated)"]
+
+        app1 -->|"messageType:<br/>PAYMENT_DOMESTIC"| q1
+        app1 -->|"messageType:<br/>PAYMENT_INTERNATIONAL"| q2
+        app2 -->|"messageType:<br/>ACCOUNT_TRANSACTION"| q3
+        app3 -->|"messageType:<br/>FRAUD_ALERT"| q4
+
+        q1 -.->|"Alias/Forward"| gateway
+        q2 -.->|"Alias/Forward"| gateway
+        q3 -.->|"Alias/Forward"| gateway
+        q4 -.->|"Alias/Forward"| gateway
+    end
+
+    subgraph cc["Confluent Cloud"]
+        direction TB
+
+        subgraph connect["Connect Cluster"]
+            connector["IBM MQ Source Connector<br/>📡<br/>Single Connector Instance"]
+
+            subgraph smt["SMT Chain"]
+                smt1["InsertField<br/>(Add kafkaIngestTime)"]
+                smt2["RegexRouter<br/>(Route by messageType header)"]
+
+                smt1 --> smt2
+            end
+
+            connector --> smt
+        end
+
+        subgraph kafka["Kafka Cluster"]
+            direction LR
+            t1["📊 PAYMENT_DOMESTIC"]
+            t2["📊 PAYMENT_INTERNATIONAL"]
+            t3["📊 ACCOUNT_TRANSACTION"]
+            t4["📊 FRAUD_ALERT"]
+            dlq1["⚠️ mq-unrouted-dlq"]
+            dlq2["❌ mq-error-dlq"]
+        end
+
+        smt --> t1
+        smt --> t2
+        smt --> t3
+        smt --> t4
+        smt -.->|"No messageType"| dlq1
+        connector -.->|"Processing errors"| dlq2
+    end
+
+    subgraph consumers["Downstream Consumers"]
+        direction TB
+        c1["Payment Processing<br/>Microservice"]
+        c2["Fraud Analytics<br/>(ksqlDB/Flink)"]
+        c3["Data Warehouse<br/>(Snowflake Sink)"]
+        c4["Real-time Dashboard<br/>(WebSocket)"]
+    end
+
+    gateway ==>|"MQ Properties become<br/>Kafka Headers"| connector
+
+    t1 --> c1
+    t2 --> c1
+    t3 --> c2
+    t4 --> c2
+    kafka --> c3
+    kafka --> c4
+
+    classDef mqStyle fill:#134a8e,stroke:#0c2d57,color:#fff
+    classDef connectorStyle fill:#7b68ee,stroke:#483d8b,color:#fff
+    classDef smtStyle fill:#ff6b6b,stroke:#c92a2a,color:#fff
+    classDef topicStyle fill:#51cf66,stroke:#2b8a3e,color:#000
+    classDef dlqStyle fill:#ffa94d,stroke:#e67700,color:#000
+    classDef consumerStyle fill:#74c0fc,stroke:#1864ab,color:#000
+
+    class app1,app2,app3,q1,q2,q3,q4,gateway mqStyle
+    class connector connectorStyle
+    class smt1,smt2 smtStyle
+    class t1,t2,t3,t4 topicStyle
+    class dlq1,dlq2 dlqStyle
+    class c1,c2,c3,c4 consumerStyle

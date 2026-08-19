@@ -1,0 +1,46 @@
+{
+  "name": "mq-gateway-banking-source",
+  "config": {
+    "connector.class": "io.confluent.connect.ibm.mq.IbmMQSourceConnector",
+    "tasks.max": "1",
+
+    "kafka.topic": "mq-unrouted-dlq",
+
+    "mq.hostname": "YOUR_MQ_HOSTNAME",
+    "mq.port": "1414",
+    "mq.queue.manager": "QM1",
+    "mq.transport.type": "client",
+    "mq.channel": "SYSTEM.DEF.SVRCONN",
+    "mq.username": "YOUR_MQ_USERNAME",
+    "mq.password": "YOUR_MQ_PASSWORD",
+
+    "jms.destination.name": "GATEWAY.QUEUE",
+    "jms.destination.type": "queue",
+
+    "mq.record.builder": "com.ibm.eventstreams.connect.mqsource.builders.DefaultRecordBuilder",
+    "mq.message.body.jms": "true",
+    "mq.record.builder.key.header": "JMSCorrelationID",
+
+    "key.converter": "org.apache.kafka.connect.storage.StringConverter",
+    "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "value.converter.schemas.enable": "false",
+
+    "transforms": "addIngestMetadata,routeByMessageType",
+
+    "transforms.addIngestMetadata.type": "org.apache.kafka.connect.transforms.InsertField$Value",
+    "transforms.addIngestMetadata.timestamp.field": "kafkaIngestTime",
+    "transforms.addIngestMetadata.static.field": "sourceSystem",
+    "transforms.addIngestMetadata.static.value": "CORE_BANKING_MQ",
+
+    "transforms.routeByMessageType.type": "org.apache.kafka.connect.transforms.RegexRouter",
+    "transforms.routeByMessageType.regex": ".*",
+    "transforms.routeByMessageType.replacement": "${header:messageType}",
+
+    "errors.tolerance": "all",
+    "errors.deadletterqueue.topic.name": "mq-error-dlq",
+    "errors.deadletterqueue.topic.replication.factor": "3",
+    "errors.deadletterqueue.context.headers.enable": "true",
+    "errors.log.enable": "true",
+    "errors.log.include.messages": "true"
+  }
+}

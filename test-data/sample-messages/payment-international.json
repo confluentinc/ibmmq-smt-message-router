@@ -1,0 +1,19 @@
+{
+  "transactionId": "TXN-INTL-20260819-002",
+  "transactionType": "INTERNATIONAL_WIRE",
+  "amount": 25000.00,
+  "currency": "USD",
+  "fromAccount": "US-5555666677",
+  "toAccount": "GB-9988776655",
+  "fromAccountHolder": "TechCorp Inc",
+  "toAccountHolder": "UK Suppliers Ltd",
+  "description": "Invoice payment #INV-2026-45678",
+  "swiftCode": "CHASUS33",
+  "beneficiarySwift": "BARCGB22",
+  "intermediaryBank": "CITI",
+  "timestamp": "2026-08-19T15:45:00Z",
+  "exchangeRate": 1.0,
+  "fees": 45.00,
+  "branchCode": "BR-CORP-001",
+  "status": "PENDING"
+}

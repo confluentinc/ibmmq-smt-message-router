@@ -1,0 +1,25 @@
+{
+  "alertId": "FRAUD-20260819-004",
+  "alertType": "SUSPICIOUS_TRANSACTION",
+  "severity": "HIGH",
+  "accountNumber": "1122334455667788",
+  "accountHolder": "Sarah Williams",
+  "transactionId": "TXN-SUS-20260819-999",
+  "amount": 9500.00,
+  "currency": "USD",
+  "merchant": "Unknown Vendor - Nigeria",
+  "location": "Lagos, Nigeria",
+  "ipAddress": "197.210.xxx.xxx",
+  "deviceId": "UNKNOWN",
+  "timestamp": "2026-08-19T03:22:15Z",
+  "reasons": [
+    "Transaction from unusual location",
+    "Amount exceeds daily limit",
+    "Merchant in high-risk country",
+    "Device not recognized"
+  ],
+  "riskScore": 87,
+  "actionTaken": "TRANSACTION_BLOCKED",
+  "investigator": "AUTO_SYSTEM",
+  "status": "UNDER_REVIEW"
+}
