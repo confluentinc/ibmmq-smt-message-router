@@ -1,0 +1,35 @@
+# MQ Configuration (contains credentials)
+test-data/mq-config.properties
+
+# Local connector configs with credentials
+confluent-cloud/connector/mq-gateway-connector-local.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/

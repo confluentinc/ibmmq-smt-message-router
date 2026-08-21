@@ -1,0 +1,14 @@
+{
+  "transactionId": "TXN-DOM-20260819-001",
+  "transactionType": "DOMESTIC_TRANSFER",
+  "amount": 1500.00,
+  "currency": "USD",
+  "fromAccount": "9876543210",
+  "toAccount": "1234567890",
+  "fromAccountHolder": "Alice Johnson",
+  "toAccountHolder": "Bob Smith",
+  "description": "Rent payment - August 2026",
+  "timestamp": "2026-08-19T14:30:00Z",
+  "branchCode": "BR-001",
+  "status": "PENDING"
+}

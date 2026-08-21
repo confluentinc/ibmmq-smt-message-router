@@ -1,0 +1,40 @@
+%% Message Flow Sequence Diagram
+%% Shows step-by-step flow of a payment message through the system
+
+sequenceDiagram
+    autonumber
+    participant App as Banking App
+    participant MQ as IBM MQ<br/>GATEWAY.QUEUE
+    participant Connector as MQ Source<br/>Connector
+    participant SMT as SMT Chain
+    participant Kafka as Kafka Topic<br/>PAYMENT_DOMESTIC
+    participant Consumer as Payment<br/>Processor
+
+    Note over App,MQ: 1. Message Publishing
+    App->>App: Create payment message
+    App->>App: Set MQ properties:<br/>messageType=PAYMENT_DOMESTIC<br/>priority=NORMAL<br/>sourceQueue=PAYMENT.DOMESTIC.QUEUE
+    App->>MQ: Publish to GATEWAY.QUEUE
+    Note right of MQ: Message stored<br/>with properties
+
+    Note over Connector,SMT: 2. Connector Processing
+    Connector->>MQ: Poll for messages (every 30s)
+    MQ-->>Connector: Return message + properties
+    Connector->>Connector: Convert MQ properties<br/>to Kafka headers
+
+    Note over SMT: 3. SMT Transformation
+    Connector->>SMT: Pass record
+    SMT->>SMT: Transform 1: InsertField<br/>Add kafkaIngestTime
+    SMT->>SMT: Transform 2: RegexRouter<br/>Read header: messageType
+    SMT->>SMT: Determine target topic:<br/>${header:messageType}<br/>= PAYMENT_DOMESTIC
+
+    Note over SMT,Kafka: 4. Produce to Kafka
+    SMT->>Kafka: Produce to PAYMENT_DOMESTIC topic
+    Note right of Kafka: Message stored with:<br/>- Headers (from MQ props)<br/>- Key (JMSCorrelationID)<br/>- Value (enriched payload)
+
+    Note over Kafka,Consumer: 5. Consumption
+    Consumer->>Kafka: Poll for messages
+    Kafka-->>Consumer: Return record
+    Consumer->>Consumer: Process payment
+    Consumer->>Consumer: Commit offset
+
+    Note over App,Consumer: End-to-End Flow Complete

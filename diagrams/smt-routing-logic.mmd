@@ -1,0 +1,43 @@
+%% SMT Routing Logic Decision Flow
+
+flowchart TD
+    Start([Message arrives from MQ]) --> Extract[Connector extracts<br/>MQ properties as<br/>Kafka headers]
+
+    Extract --> SMT1[SMT 1: InsertField]
+    SMT1 --> AddMeta[Add metadata:<br/>kafkaIngestTime<br/>sourceSystem=CORE_BANKING_MQ]
+
+    AddMeta --> SMT2[SMT 2: RegexRouter]
+    SMT2 --> CheckHeader{Does header<br/>messageType<br/>exist?}
+
+    CheckHeader -->|Yes| ReadValue[Read header value]
+    CheckHeader -->|No| DefaultTopic[Route to<br/>mq-unrouted-dlq]
+
+    ReadValue --> Route{messageType<br/>value?}
+
+    Route -->|PAYMENT_DOMESTIC| T1[Topic:<br/>PAYMENT_DOMESTIC]
+    Route -->|PAYMENT_INTERNATIONAL| T2[Topic:<br/>PAYMENT_INTERNATIONAL]
+    Route -->|ACCOUNT_TRANSACTION| T3[Topic:<br/>ACCOUNT_TRANSACTION]
+    Route -->|FRAUD_ALERT| T4[Topic:<br/>FRAUD_ALERT]
+    Route -->|Other/Unknown| DefaultTopic
+
+    T1 --> Success([Message produced<br/>to Kafka])
+    T2 --> Success
+    T3 --> Success
+    T4 --> Success
+    DefaultTopic --> Success
+
+    CheckHeader -.->|Processing Error| ErrorDLQ[Topic:<br/>mq-error-dlq]
+    Route -.->|Serialization Error| ErrorDLQ
+
+    style Start fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style Success fill:#e8f5e9,stroke:#388e3c,stroke-width:2px
+    style SMT1 fill:#ff6b6b,stroke:#c92a2a,color:#fff
+    style SMT2 fill:#ff6b6b,stroke:#c92a2a,color:#fff
+    style CheckHeader fill:#fff3bf,stroke:#f9a825,stroke-width:2px
+    style Route fill:#fff3bf,stroke:#f9a825,stroke-width:2px
+    style T1 fill:#51cf66,stroke:#2b8a3e,stroke-width:2px
+    style T2 fill:#51cf66,stroke:#2b8a3e,stroke-width:2px
+    style T3 fill:#51cf66,stroke:#2b8a3e,stroke-width:2px
+    style T4 fill:#51cf66,stroke:#2b8a3e,stroke-width:2px
+    style DefaultTopic fill:#ffa94d,stroke:#e67700,stroke-width:2px
+    style ErrorDLQ fill:#fa5252,stroke:#c92a2a,stroke-width:2px,color:#fff

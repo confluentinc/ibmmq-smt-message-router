@@ -1,0 +1,26 @@
+# IBM MQ Connection Configuration
+# Copy this file to mq-config.properties and update with your MQ details
+# DO NOT commit mq-config.properties with credentials to version control
+
+# MQ Server Details
+mq.hostname=your-mq-host.example.com
+mq.port=1414
+mq.queue.manager=QM1
+mq.channel=SYSTEM.DEF.SVRCONN
+
+# Gateway Queue Name (where messages will be published)
+mq.queue.name=GATEWAY.QUEUE
+
+# Authentication
+mq.username=your-mq-username
+mq.password=your-mq-password
+
+# Optional: TLS/SSL Configuration (uncomment if using SSL)
+# mq.ssl.cipher.spec=TLS_RSA_WITH_AES_256_CBC_SHA256
+# mq.ssl.key.repository=/path/to/keystore
+
+# Notes:
+# - The queue name should match the Gateway Queue in your MQ environment
+# - The channel must allow client connections
+# - The user needs GET permission on the queue
+# - For production, use a secrets manager instead of plaintext passwords

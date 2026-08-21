@@ -1,0 +1,16 @@
+{
+  "transactionId": "TXN-ACCT-20260819-003",
+  "transactionType": "DEBIT",
+  "accountNumber": "4444333322221111",
+  "amount": 89.99,
+  "currency": "USD",
+  "merchant": "Amazon.com",
+  "category": "ONLINE_PURCHASE",
+  "description": "Office supplies purchase",
+  "timestamp": "2026-08-19T12:15:30Z",
+  "balanceBefore": 5420.50,
+  "balanceAfter": 5330.51,
+  "authorizationCode": "AUTH-789456",
+  "branchCode": "BR-001",
+  "status": "COMPLETED"
+}
