@@ -1,0 +1,47 @@
+{
+  "name": "mq-source-routing-with-metadata",
+  "config": {
+    "connector.class": "io.confluent.connect.ibm.mq.IbmMQSourceConnector",
+    "tasks.max": "1",
+
+    "kafka.topic": "mq-unrouted-dlq",
+
+    "mq.hostname": "${MQ_HOSTNAME}",
+    "mq.port": "${MQ_PORT}",
+    "mq.queue.manager": "${MQ_QUEUE_MANAGER}",
+    "mq.channel": "${MQ_CHANNEL}",
+    "mq.username": "${MQ_USERNAME}",
+    "mq.password": "${MQ_PASSWORD}",
+
+    "jms.destination.name": "GATEWAY.QUEUE",
+    "jms.destination.type": "queue",
+
+    "mq.message.body.jms": "true",
+    "mq.record.builder.key.header": "JMSCorrelationID",
+
+    "key.converter": "org.apache.kafka.connect.storage.StringConverter",
+    "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "value.converter.schemas.enable": "false",
+
+    "_comment_transforms": "===== SMT CHAIN: ENRICHMENT + ROUTING =====",
+
+    "transforms": "addTimestamp,addSource,route",
+
+    "_comment_step1": "Step 1: Add ingestion timestamp to message payload",
+    "transforms.addTimestamp.type": "org.apache.kafka.connect.transforms.InsertField$Value",
+    "transforms.addTimestamp.timestamp.field": "kafkaIngestTime",
+
+    "_comment_step2": "Step 2: Add source system identifier to message payload",
+    "transforms.addSource.type": "org.apache.kafka.connect.transforms.InsertField$Value",
+    "transforms.addSource.static.field": "sourceSystem",
+    "transforms.addSource.static.value": "CORE_BANKING_MQ",
+
+    "_comment_step3": "Step 3: Route based on messageType header",
+    "transforms.route.type": "org.apache.kafka.connect.transforms.RegexRouter",
+    "transforms.route.regex": ".*",
+    "transforms.route.replacement": "${header:messageType}",
+
+    "_comment_result": "Messages are enriched with metadata AND routed to appropriate topics",
+    "_comment_usecase": "Useful for audit trails, tracking message lineage, and adding system context"
+  }
+}
