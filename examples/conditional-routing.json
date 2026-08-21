@@ -1,0 +1,52 @@
+{
+  "name": "mq-source-conditional-routing",
+  "config": {
+    "connector.class": "io.confluent.connect.ibm.mq.IbmMQSourceConnector",
+    "tasks.max": "1",
+
+    "kafka.topic": "mq-unrouted-dlq",
+
+    "mq.hostname": "${MQ_HOSTNAME}",
+    "mq.port": "${MQ_PORT}",
+    "mq.queue.manager": "${MQ_QUEUE_MANAGER}",
+    "mq.channel": "${MQ_CHANNEL}",
+    "mq.username": "${MQ_USERNAME}",
+    "mq.password": "${MQ_PASSWORD}",
+
+    "jms.destination.name": "GATEWAY.QUEUE",
+    "jms.destination.type": "queue",
+
+    "mq.message.body.jms": "true",
+    "mq.record.builder.key.header": "JMSCorrelationID",
+
+    "key.converter": "org.apache.kafka.connect.storage.StringConverter",
+    "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "value.converter.schemas.enable": "false",
+
+    "_comment_transforms": "===== CONDITIONAL ROUTING WITH PREDICATES =====",
+
+    "transforms": "routeHighPriority,routeNormal",
+    "predicates": "isHighPriority",
+
+    "_comment_predicate": "Define condition: message has 'priority' header with value 'HIGH'",
+    "predicates.isHighPriority.type": "org.apache.kafka.connect.transforms.predicates.HasHeaderKey",
+    "predicates.isHighPriority.name": "priority",
+
+    "_comment_transform1": "Transform 1: Route high-priority messages to priority topics",
+    "transforms.routeHighPriority.type": "org.apache.kafka.connect.transforms.RegexRouter",
+    "transforms.routeHighPriority.regex": ".*",
+    "transforms.routeHighPriority.replacement": "${header:messageType}-priority",
+    "transforms.routeHighPriority.predicate": "isHighPriority",
+
+    "_comment_transform2": "Transform 2: Route normal messages to standard topics",
+    "transforms.routeNormal.type": "org.apache.kafka.connect.transforms.RegexRouter",
+    "transforms.routeNormal.regex": ".*",
+    "transforms.routeNormal.replacement": "${header:messageType}",
+    "transforms.routeNormal.predicate": "isHighPriority",
+    "transforms.routeNormal.negate": "true",
+
+    "_comment_examples": "priority=HIGH + messageType=PAYMENT -> PAYMENT-priority topic",
+    "_comment_examples2": "priority=NORMAL + messageType=PAYMENT -> PAYMENT topic",
+    "_comment_usecase": "Useful for separating high-priority/urgent messages into different topics for specialized processing"
+  }
+}

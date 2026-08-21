@@ -1,0 +1,38 @@
+{
+  "name": "mq-source-basic-routing",
+  "config": {
+    "connector.class": "io.confluent.connect.ibm.mq.IbmMQSourceConnector",
+    "tasks.max": "1",
+
+    "kafka.topic": "mq-unrouted-dlq",
+
+    "mq.hostname": "${MQ_HOSTNAME}",
+    "mq.port": "${MQ_PORT}",
+    "mq.queue.manager": "${MQ_QUEUE_MANAGER}",
+    "mq.channel": "${MQ_CHANNEL}",
+    "mq.username": "${MQ_USERNAME}",
+    "mq.password": "${MQ_PASSWORD}",
+
+    "jms.destination.name": "GATEWAY.QUEUE",
+    "jms.destination.type": "queue",
+
+    "mq.message.body.jms": "true",
+    "mq.record.builder.key.header": "JMSCorrelationID",
+
+    "key.converter": "org.apache.kafka.connect.storage.StringConverter",
+    "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "value.converter.schemas.enable": "false",
+
+    "_comment_transforms": "===== SMT ROUTING CONFIGURATION =====",
+
+    "transforms": "route",
+
+    "transforms.route.type": "org.apache.kafka.connect.transforms.RegexRouter",
+    "transforms.route.regex": ".*",
+    "transforms.route.replacement": "${header:messageType}",
+
+    "_comment_routing": "Routes messages based on 'messageType' header value",
+    "_comment_examples": "messageType=PAYMENT_DOMESTIC -> PAYMENT_DOMESTIC topic, messageType=FRAUD_ALERT -> FRAUD_ALERT topic",
+    "_comment_fallback": "Messages without messageType header go to kafka.topic (mq-unrouted-dlq)"
+  }
+}
