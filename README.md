@@ -61,6 +61,57 @@ See the [examples/](examples/) directory for complete configuration examples:
 | **conditional-routing.json** | Route based on predicates | Different routing rules for different message types |
 | **routing-with-metadata.json** | Add enrichment before routing | Need to add timestamp, source info, etc. |
 
+## Sample Message: How Routing Works
+
+Let's see how a single MQ message gets routed differently by each pattern.
+
+### Sample MQ Message
+
+**Publishing to MQ (Java):**
+```java
+TextMessage message = session.createTextMessage("{\"transactionId\":\"TXN-12345\",\"amount\":1500.00}");
+
+// Set MQ properties (these become Kafka headers)
+message.setStringProperty("messageType", "PAYMENT");
+message.setStringProperty("priority", "HIGH");
+message.setStringProperty("businessUnit", "RETAIL");
+
+Queue gatewayQueue = session.createQueue("GATEWAY.QUEUE");
+sender.send(gatewayQueue, message);
+```
+
+**Resulting Kafka Headers (after connector processing):**
+```
+messageType: PAYMENT
+priority: HIGH
+businessUnit: RETAIL
+```
+
+**Message Payload:**
+```json
+{"transactionId":"TXN-12345","amount":1500.00}
+```
+
+### How Each Pattern Routes This Message
+
+| Pattern | Configuration | Resulting Topic | Why |
+|---------|--------------|-----------------|-----|
+| **Pattern 1: Basic** | `${header:messageType}` | `PAYMENT` | Uses messageType header directly |
+| **Pattern 2: Prefix** | `banking-${header:messageType}` | `banking-PAYMENT` | Adds namespace prefix |
+| **Pattern 3: Multi-dimensional** | `${header:businessUnit}-${header:messageType}` | `RETAIL-PAYMENT` | Combines two headers |
+| **Pattern 4: Enrichment** | `${header:messageType}` (after enrichment) | `PAYMENT` | Same routing, but payload enriched first |
+| **Pattern 5: Conditional** | `${header:messageType}-priority` (has priority header) | `PAYMENT-priority` | Routes to priority topic |
+
+**Pattern 4 Enriched Payload:**
+```json
+{
+  "transactionId":"TXN-12345",
+  "amount":1500.00,
+  "ingestedAt":"2026-08-25T10:30:00Z",
+  "sourceSystem":"CORE_BANKING_MQ"
+}
+```
+
 ## SMT Configuration Patterns
 
 ### Pattern 1: Basic Routing
@@ -74,6 +125,12 @@ Route based on a single header value:
 "transforms.route.replacement": "${header:messageType}"
 ```
 
+**Result:**
+- Message with `messageType: PAYMENT_DOMESTIC` → Routes to `PAYMENT_DOMESTIC` topic
+- Message with `messageType: PAYMENT_INTERNATIONAL` → Routes to `PAYMENT_INTERNATIONAL` topic
+- Message with `messageType: FRAUD_ALERT` → Routes to `FRAUD_ALERT` topic
+- Message without `messageType` header → Routes to `mq-default` topic (fallback)
+
 ### Pattern 2: Routing with Topic Prefix
 
 Add a namespace prefix to all routed topics:
@@ -85,7 +142,11 @@ Add a namespace prefix to all routed topics:
 "transforms.route.replacement": "banking-${header:messageType}"
 ```
 
-Topics: `banking-PAYMENT_DOMESTIC`, `banking-FRAUD_ALERT`, etc.
+**Result:**
+- Message with `messageType: PAYMENT_DOMESTIC` → Routes to `banking-PAYMENT_DOMESTIC` topic
+- Message with `messageType: FRAUD_ALERT` → Routes to `banking-FRAUD_ALERT` topic
+- Message with `messageType: ACCOUNT_TRANSACTION` → Routes to `banking-ACCOUNT_TRANSACTION` topic
+- All topics are prefixed with `banking-` to create a clear namespace for MQ-sourced messages
 
 ### Pattern 3: Multi-Dimensional Routing
 
@@ -98,7 +159,11 @@ Combine multiple headers for topic name:
 "transforms.route.replacement": "${header:businessUnit}-${header:messageType}"
 ```
 
-Topics: `RETAIL-PAYMENT`, `CORPORATE-PAYMENT`, etc.
+**Result:**
+- Message with `businessUnit: RETAIL` + `messageType: PAYMENT` → Routes to `RETAIL-PAYMENT` topic
+- Message with `businessUnit: CORPORATE` + `messageType: PAYMENT` → Routes to `CORPORATE-PAYMENT` topic
+- Message with `businessUnit: RETAIL` + `messageType: FRAUD_ALERT` → Routes to `RETAIL-FRAUD_ALERT` topic
+- Each business unit gets separate topics for each message type, enabling independent processing and retention policies
 
 ### Pattern 4: Routing with Metadata Enrichment
 
@@ -118,6 +183,13 @@ Add metadata before routing:
 "transforms.route.regex": ".*",
 "transforms.route.replacement": "${header:messageType}"
 ```
+
+**Result:**
+- Messages are enriched with additional fields BEFORE routing
+- Original message: `{"transactionId": "123", "amount": 1000}`
+- Enriched message: `{"transactionId": "123", "amount": 1000, "ingestedAt": "2026-08-21T10:30:00Z", "sourceSystem": "CORE_BANKING_MQ"}`
+- Then routed by `messageType` to appropriate topic (e.g., `PAYMENT_DOMESTIC`)
+- Downstream consumers receive enriched messages with audit trail and source tracking built-in
 
 ### Pattern 5: Conditional Routing with Predicates
 
@@ -141,6 +213,13 @@ Apply different routing rules based on conditions:
 "transforms.routeNormal.predicate": "isHighPriority",
 "transforms.routeNormal.negate": "true"
 ```
+
+**Result:**
+- Message with `priority: HIGH` + `messageType: PAYMENT` → Routes to `PAYMENT-priority` topic
+- Message with `priority: CRITICAL` + `messageType: FRAUD_ALERT` → Routes to `FRAUD_ALERT-priority` topic
+- Message with `messageType: PAYMENT` (no priority header) → Routes to `PAYMENT` topic
+- Message with `messageType: ACCOUNT_TRANSACTION` (no priority header) → Routes to `ACCOUNT_TRANSACTION` topic
+- High-priority messages get dedicated topics for faster processing, separate consumer groups, and stricter SLAs
 
 ## Prerequisites
 
