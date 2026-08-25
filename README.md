@@ -61,6 +61,57 @@ See the [examples/](examples/) directory for complete configuration examples:
 | **conditional-routing.json** | Route based on predicates | Different routing rules for different message types |
 | **routing-with-metadata.json** | Add enrichment before routing | Need to add timestamp, source info, etc. |
 
+## Sample Message: How Routing Works
+
+Let's see how a single MQ message gets routed differently by each pattern.
+
+### Sample MQ Message
+
+**Publishing to MQ (Java):**
+```java
+TextMessage message = session.createTextMessage("{\"transactionId\":\"TXN-12345\",\"amount\":1500.00}");
+
+// Set MQ properties (these become Kafka headers)
+message.setStringProperty("messageType", "PAYMENT");
+message.setStringProperty("priority", "HIGH");
+message.setStringProperty("businessUnit", "RETAIL");
+
+Queue gatewayQueue = session.createQueue("GATEWAY.QUEUE");
+sender.send(gatewayQueue, message);
+```
+
+**Resulting Kafka Headers (after connector processing):**
+```
+messageType: PAYMENT
+priority: HIGH
+businessUnit: RETAIL
+```
+
+**Message Payload:**
+```json
+{"transactionId":"TXN-12345","amount":1500.00}
+```
+
+### How Each Pattern Routes This Message
+
+| Pattern | Configuration | Resulting Topic | Why |
+|---------|--------------|-----------------|-----|
+| **Pattern 1: Basic** | `${header:messageType}` | `PAYMENT` | Uses messageType header directly |
+| **Pattern 2: Prefix** | `banking-${header:messageType}` | `banking-PAYMENT` | Adds namespace prefix |
+| **Pattern 3: Multi-dimensional** | `${header:businessUnit}-${header:messageType}` | `RETAIL-PAYMENT` | Combines two headers |
+| **Pattern 4: Enrichment** | `${header:messageType}` (after enrichment) | `PAYMENT` | Same routing, but payload enriched first |
+| **Pattern 5: Conditional** | `${header:messageType}-priority` (has priority header) | `PAYMENT-priority` | Routes to priority topic |
+
+**Pattern 4 Enriched Payload:**
+```json
+{
+  "transactionId":"TXN-12345",
+  "amount":1500.00,
+  "ingestedAt":"2026-08-25T10:30:00Z",
+  "sourceSystem":"CORE_BANKING_MQ"
+}
+```
+
 ## SMT Configuration Patterns
 
 ### Pattern 1: Basic Routing
