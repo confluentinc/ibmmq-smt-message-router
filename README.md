@@ -224,10 +224,10 @@ Apply different routing rules based on conditions:
 ## Prerequisites
 
 This assumes you already have:
-- ✅ IBM MQ environment with Gateway Queue configured
-- ✅ IBM MQ Source Connector deployed in Confluent Cloud
-- ✅ MQ messages with routing properties set (e.g., `messageType`)
-- ✅ Kafka topics created (or auto-creation enabled)
+- IBM MQ environment with Gateway Queue configured
+- IBM MQ Source Connector deployed in Confluent Cloud
+- MQ messages with routing properties set (e.g., `messageType`)
+- Kafka topics created (or auto-creation enabled)
 
 If you need help setting up the MQ connector, see the [Confluent IBM MQ Source Connector documentation](https://docs.confluent.io/kafka-connectors/ibm-mq-source/current/overview.html).
 
@@ -269,19 +269,19 @@ Configure DLQ to catch routing errors:
 ## Troubleshooting
 
 ### Messages going to wrong topic
-- ✅ Check the header value matches topic name exactly (case-sensitive)
-- ✅ Verify MQ property is being set correctly
-- ✅ Check connector logs for routing decisions
+- Check the header value matches topic name exactly (case-sensitive)
+- Verify MQ property is being set correctly
+- Check connector logs for routing decisions
 
 ### Messages going to default topic instead of being routed
-- ✅ Verify header exists on the message (check in Confluent Cloud UI)
-- ✅ Confirm MQ message has the property set
-- ✅ Check connector config has `mq.message.body.jms: "true"`
+- Verify header exists on the message (check in Confluent Cloud UI)
+- Confirm MQ message has the property set
+- Check connector config has `mq.message.body.jms: "true"`
 
 ### Topic not found errors
-- ✅ Enable auto topic creation, OR
-- ✅ Pre-create all expected topics, OR
-- ✅ Use DLQ to catch messages for non-existent topics
+- Enable auto topic creation, OR
+- Pre-create all expected topics, OR
+- Use DLQ to catch messages for non-existent topics
 
 ## Resources
 
