@@ -13,7 +13,7 @@
     "mq.username": "${MQ_USERNAME}",
     "mq.password": "${MQ_PASSWORD}",
 
-    "jms.destination.name": "GATEWAY.QUEUE",
+    "jms.destination.name": "KAFKA.AGGREGATION.QUEUE",
     "jms.destination.type": "queue",
 
     "mq.message.body.jms": "true",
