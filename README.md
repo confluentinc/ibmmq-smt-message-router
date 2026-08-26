@@ -4,18 +4,26 @@ Single Message Transformation (SMT) examples for routing IBM MQ messages to diff
 
 ## Overview
 
-This repository provides **SMT configuration examples** for the IBM MQ Source Connector to route messages from a single MQ Gateway Queue to multiple Kafka topics based on message metadata.
+This repository provides **SMT configuration examples** for the IBM MQ Source Connector to route messages from a single MQ aggregation queue to multiple Kafka topics based on message metadata.
 
 ### Use Case
 
-When using the **IBM MQ Gateway Queue pattern** (consolidating multiple MQ queues into one), you need to route messages to different Kafka topics based on their content or metadata. This is achieved using Confluent's `RegexRouter` SMT.
+When using **IBM MQ Streaming Queues** (introduced in IBM MQ 9.2.3+) to duplicate messages from multiple application queues into a single aggregation queue for Kafka, you need to route messages to different Kafka topics based on their content or metadata. This is achieved using Confluent's `RegexRouter` SMT.
+
+**The Streaming Queue Pattern:**
+- Legacy applications continue reading from their original queues (e.g., `APP1.QUEUE`, `APP2.QUEUE`)
+- IBM MQ automatically duplicates messages to an aggregation queue (e.g., `KAFKA.AGGREGATION.QUEUE`) using the `STREAMQ` property
+- The IBM MQ Source Connector reads from the aggregation queue
+- SMTs route duplicated messages to appropriate Kafka topics based on message properties
+- **Non-disruptive:** Legacy systems are unaffected; Kafka gets a consolidated real-time feed
 
 ### How It Works
 
-1. MQ messages include properties (e.g., `messageType`) that indicate message category
-2. IBM MQ Source Connector automatically converts MQ properties → Kafka headers
-3. `RegexRouter` SMT reads the Kafka header and routes to the appropriate topic
-4. **No custom code required** - purely configuration-based routing
+1. **Streaming Queue Setup:** Configure `STREAMQ` property on application queues to duplicate messages to `KAFKA.AGGREGATION.QUEUE`
+2. **Message Duplication:** When applications put messages on their queues, MQ automatically clones messages (including headers and payload) to the aggregation queue
+3. **Connector Ingestion:** IBM MQ Source Connector reads from the aggregation queue and converts MQ properties → Kafka headers
+4. **SMT Routing:** `RegexRouter` SMT reads Kafka headers (e.g., `messageType`) and routes to the appropriate topic
+5. **No custom code required** - purely configuration-based routing
 
 ```
 MQ Message Properties          Kafka Headers              SMT Routing
@@ -71,13 +79,16 @@ Let's see how a single MQ message gets routed differently by each pattern.
 ```java
 TextMessage message = session.createTextMessage("{\"transactionId\":\"TXN-12345\",\"amount\":1500.00}");
 
-// Set MQ properties (these become Kafka headers)
+// Set MQ properties (these become Kafka headers after duplication)
 message.setStringProperty("messageType", "PAYMENT");
 message.setStringProperty("priority", "HIGH");
 message.setStringProperty("businessUnit", "RETAIL");
 
-Queue gatewayQueue = session.createQueue("GATEWAY.QUEUE");
-sender.send(gatewayQueue, message);
+// Application publishes to its normal queue
+Queue appQueue = session.createQueue("PAYMENT.APP.QUEUE");
+sender.send(appQueue, message);
+
+// MQ automatically duplicates to KAFKA.AGGREGATION.QUEUE (via STREAMQ property)
 ```
 
 **Resulting Kafka Headers (after connector processing):**
@@ -221,10 +232,48 @@ Apply different routing rules based on conditions:
 - Message with `messageType: ACCOUNT_TRANSACTION` (no priority header) → Routes to `ACCOUNT_TRANSACTION` topic
 - High-priority messages get dedicated topics for faster processing, separate consumer groups, and stricter SLAs
 
+## IBM MQ Streaming Queue Configuration
+
+**Requirement:** IBM MQ 9.2.3 or later
+
+To set up message duplication using Streaming Queues:
+
+### 1. Create Aggregation Queue
+
+```mqsc
+DEFINE QLOCAL(KAFKA.AGGREGATION.QUEUE) MAXDEPTH(100000)
+```
+
+### 2. Configure Streaming on Application Queues
+
+Point your existing application queues to duplicate messages to the aggregation queue:
+
+```mqsc
+ALTER QLOCAL(PAYMENT.APP.QUEUE) STREAMQ(KAFKA.AGGREGATION.QUEUE) STRMQOS(BESTEF)
+ALTER QLOCAL(ACCOUNT.APP.QUEUE) STREAMQ(KAFKA.AGGREGATION.QUEUE) STRMQOS(BESTEF)
+ALTER QLOCAL(FRAUD.APP.QUEUE) STREAMQ(KAFKA.AGGREGATION.QUEUE) STRMQOS(BESTEF)
+```
+
+**Configuration Options:**
+- `STREAMQ`: Target queue for duplicated messages
+- `STRMQOS(BESTEF)`: Best Effort quality of service - if aggregation queue fills up, it won't block the original application queue
+
+### 3. Configure Connector to Read from Aggregation Queue
+
+```json
+{
+  "connector.class": "io.confluent.connect.ibm.mq.IbmMQSourceConnector",
+  "jms.destination.name": "KAFKA.AGGREGATION.QUEUE",
+  "jms.destination.type": "queue"
+}
+```
+
+**Result:** Legacy applications continue using their queues unchanged, while Kafka receives a real-time copy of all messages via the aggregation queue.
+
 ## Prerequisites
 
 This assumes you already have:
-- IBM MQ environment with Gateway Queue configured
+- IBM MQ 9.2.3+ environment with Streaming Queues configured
 - IBM MQ Source Connector deployed in Confluent Cloud
 - MQ messages with routing properties set (e.g., `messageType`)
 - Kafka topics created (or auto-creation enabled)
@@ -243,11 +292,16 @@ message.setStringProperty("messageType", "PAYMENT_DOMESTIC");
 message.setStringProperty("priority", "HIGH");
 message.setStringProperty("businessUnit", "RETAIL");
 
-Queue gatewayQueue = session.createQueue("GATEWAY.QUEUE");
-sender.send(gatewayQueue, message);
+// Application publishes to its normal queue
+Queue appQueue = session.createQueue("PAYMENT.APP.QUEUE");
+sender.send(appQueue, message);
 ```
 
-The IBM MQ Source Connector automatically converts these MQ properties to Kafka headers, which the SMT can then use for routing.
+**What happens:**
+1. Application publishes to `PAYMENT.APP.QUEUE` (business as usual)
+2. MQ automatically duplicates the message (with all properties) to `KAFKA.AGGREGATION.QUEUE` (via `STREAMQ` configuration)
+3. IBM MQ Source Connector reads from `KAFKA.AGGREGATION.QUEUE` and converts MQ properties to Kafka headers
+4. SMTs use the Kafka headers for routing
 
 ## Error Handling
 
