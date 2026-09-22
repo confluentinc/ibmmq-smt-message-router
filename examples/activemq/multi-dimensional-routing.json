@@ -1,0 +1,34 @@
+{
+  "name": "activemq-source-multi-dimensional-routing",
+  "config": {
+    "connector.class": "io.confluent.connect.activemq.ActiveMQSourceConnector",
+    "tasks.max": "1",
+
+    "kafka.topic": "jms-unrouted-dlq",
+
+    "activemq.url": "tcp://${ACTIVEMQ_HOST}:61616",
+    "activemq.username": "${ACTIVEMQ_USERNAME}",
+    "activemq.password": "${ACTIVEMQ_PASSWORD}",
+
+    "jms.destination.name": "KAFKA.AGGREGATION.QUEUE",
+    "jms.destination.type": "queue",
+
+    "key.converter": "org.apache.kafka.connect.storage.StringConverter",
+    "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "value.converter.schemas.enable": "false",
+
+    "_comment_transforms": "===== SMT ROUTING CONFIGURATION =====",
+
+    "transforms": "route",
+
+    "transforms.route.type": "org.apache.kafka.connect.transforms.RegexRouter",
+    "transforms.route.regex": ".*",
+    "transforms.route.replacement": "${header:businessUnit}-${header:messageType}",
+
+    "_comment_routing": "Routes messages based on TWO headers: businessUnit and messageType",
+    "_comment_examples": "businessUnit=RETAIL + messageType=PAYMENT -> RETAIL-PAYMENT topic",
+    "_comment_examples2": "businessUnit=CORPORATE + messageType=PAYMENT -> CORPORATE-PAYMENT topic",
+    "_comment_usecase": "Useful when you need to segregate messages by multiple dimensions (department, region, type, etc.)",
+    "_comment_note": "SMT configuration is identical across JMS providers"
+  }
+}

@@ -1,47 +1,61 @@
-# IBM MQ SMT Message Router Examples
+# JMS SMT Message Router Examples
 
-Single Message Transformation (SMT) examples for routing IBM MQ messages to different Kafka topics based on message headers.
+Single Message Transformation (SMT) examples for routing JMS messages from an aggregated queue to multiple Kafka topics based on message headers.
+
+**Supported JMS Providers:**
+- IBM MQ (IBM MQ Source Connector)
+- Apache ActiveMQ Classic (ActiveMQ Source Connector)
+- Apache ActiveMQ Artemis (ActiveMQ Source Connector)
 
 ## Overview
 
-This repository provides **SMT configuration examples** for the IBM MQ Source Connector to route messages from a single MQ aggregation queue to multiple Kafka topics based on message metadata.
+This repository provides **SMT configuration examples** for JMS Source Connectors to route messages from a single aggregated JMS queue to multiple Kafka topics based on message metadata.
 
 ### Use Case
 
-When using **IBM MQ Streaming Queues** (introduced in IBM MQ 9.2.3+) to duplicate messages from multiple application queues into a single aggregation queue for Kafka, you need to route messages to different Kafka topics based on their content or metadata. This is achieved using Confluent's `RegexRouter` SMT.
-
-**The Streaming Queue Pattern:**
-- Legacy applications continue reading from their original queues (e.g., `APP1.QUEUE`, `APP2.QUEUE`)
-- IBM MQ automatically duplicates messages to an aggregation queue (e.g., `KAFKA.AGGREGATION.QUEUE`) using the `STREAMQ` property
-- The IBM MQ Source Connector reads from the aggregation queue
-- SMTs route duplicated messages to appropriate Kafka topics based on message properties
-- **Non-disruptive:** Legacy systems are unaffected; Kafka gets a consolidated real-time feed
+When you have a **single JMS queue** containing messages from multiple sources/applications, you need to route messages to different Kafka topics based on their content or metadata. This is achieved using Confluent's `RegexRouter` SMT and other Single Message Transformations.
 
 ### How It Works
 
-1. **Streaming Queue Setup:** Configure `STREAMQ` property on application queues to duplicate messages to `KAFKA.AGGREGATION.QUEUE`
-2. **Message Duplication:** When applications put messages on their queues, MQ automatically clones messages (including headers and payload) to the aggregation queue
-3. **Connector Ingestion:** IBM MQ Source Connector reads from the aggregation queue and converts MQ properties → Kafka headers
-4. **SMT Routing:** `RegexRouter` SMT reads Kafka headers (e.g., `messageType`) and routes to the appropriate topic
-5. **No custom code required** - purely configuration-based routing
+1. **JMS messages include properties** (e.g., `messageType`, `priority`) that indicate message category
+2. **JMS Source Connector** reads from the aggregated queue and automatically converts JMS properties → Kafka headers
+3. **SMT Routing:** `RegexRouter` SMT reads Kafka headers (e.g., `messageType`) and routes to the appropriate topic
+4. **No custom code required** - purely configuration-based routing
 
 ```
-MQ Message Properties          Kafka Headers              SMT Routing
-─────────────────────         ────────────────           ────────────
+JMS Message Properties         Kafka Headers              SMT Routing
+──────────────────────        ────────────────           ────────────
 messageType=PAYMENT    →      messageType: PAYMENT   →   Topic: PAYMENT
 priority=HIGH                 priority: HIGH
 ```
+
+## Common Source Patterns for Message Aggregation
+
+This repository assumes you have a **single JMS queue** containing messages from multiple sources. Common patterns for achieving this aggregation:
+
+### IBM MQ Streaming Queues (IBM MQ 9.2.3+)
+Non-disruptive message duplication using the `STREAMQ` property. Legacy applications continue reading from original queues while messages are automatically cloned to an aggregation queue for Kafka ingestion.
+
+### ActiveMQ Network of Brokers (ActiveMQ Classic 5.x)
+Hub-and-spoke topology where spoke brokers forward messages to a central hub broker. The connector reads from the hub broker's aggregated queue. Can also use Composite Destinations for message duplication at the queue level.
+
+### Artemis Core Hub (ActiveMQ Artemis 2.x+)
+Federation-based hub where spoke brokers redistribute messages to a central hub. The connector reads from federated queues on the hub broker, providing a centralized consumption point.
+
+---
+
+**Note:** Setup of these aggregation patterns is outside the scope of this repository. This guide focuses on SMT routing patterns that work with any aggregated JMS queue.
 
 ## Quick Example
 
 ### Basic Header-Based Routing
 
-Add this SMT configuration to your IBM MQ Source Connector:
+Add this SMT configuration to your JMS Source Connector:
 
 ```json
 {
   "connector.class": "io.confluent.connect.ibm.mq.IbmMQSourceConnector",
-  "kafka.topic": "mq-default",
+  "kafka.topic": "jms-default",
   
   "transforms": "route",
   "transforms.route.type": "org.apache.kafka.connect.transforms.RegexRouter",
@@ -53,11 +67,15 @@ Add this SMT configuration to your IBM MQ Source Connector:
 **Result:**
 - Message with `messageType: PAYMENT_DOMESTIC` → Routes to `PAYMENT_DOMESTIC` topic
 - Message with `messageType: FRAUD_ALERT` → Routes to `FRAUD_ALERT` topic
-- Message without `messageType` header → Routes to `mq-default` topic (fallback)
+- Message without `messageType` header → Routes to `jms-default` topic (fallback)
+
+**Note:** SMT configuration (`transforms` section) is identical across all JMS providers. Only connector-specific properties differ.
 
 ## Configuration Examples
 
-See the [examples/](examples/) directory for complete configuration examples:
+See the [examples/](examples/) directory for complete configuration examples. Each example is available for both IBM MQ and ActiveMQ:
+- **IBM MQ:** [examples/ibm-mq/](examples/ibm-mq/)
+- **ActiveMQ:** [examples/activemq/](examples/activemq/)
 
 ### Banking Use Case Examples
 
@@ -68,6 +86,8 @@ See the [examples/](examples/) directory for complete configuration examples:
 | **multi-dimensional-routing.json** | Route by multiple headers | Need topics like `RETAIL-PAYMENT` |
 | **conditional-routing.json** | Route based on predicates | Different routing rules for different message types |
 | **routing-with-metadata.json** | Add enrichment before routing | Need to add timestamp, source info, etc. |
+
+**Note:** SMT configuration is identical across both providers. Only connector-specific properties (connection details, credentials) differ.
 
 ## Sample Message: How Routing Works
 
@@ -232,11 +252,93 @@ Apply different routing rules based on conditions:
 - Message with `messageType: ACCOUNT_TRANSACTION` (no priority header) → Routes to `ACCOUNT_TRANSACTION` topic
 - High-priority messages get dedicated topics for faster processing, separate consumer groups, and stricter SLAs
 
-## IBM MQ Streaming Queue Configuration
+## Prerequisites
+
+This assumes you already have:
+- JMS message broker environment with message aggregation configured (Streaming Queues, Network of Brokers, or Federation)
+- JMS Source Connector deployed in Confluent Cloud (IBM MQ, ActiveMQ, or Artemis)
+- JMS messages with routing properties set (e.g., `messageType`)
+- Kafka topics created (or auto-creation enabled)
+
+**Connector Documentation:**
+- [IBM MQ Source Connector](https://docs.confluent.io/kafka-connectors/ibm-mq-source/current/overview.html)
+- [ActiveMQ Source Connector](https://docs.confluent.io/kafka-connectors/activemq-source/current/overview.html)
+
+## Important: JMS Message Properties
+
+For routing to work, your JMS messages **must** include the properties you're routing on.
+
+**Example: Setting JMS properties in Java:**
+
+```java
+TextMessage message = session.createTextMessage(payload);
+message.setStringProperty("messageType", "PAYMENT_DOMESTIC");
+message.setStringProperty("priority", "HIGH");
+message.setStringProperty("businessUnit", "RETAIL");
+
+// Application publishes to its normal queue
+Queue appQueue = session.createQueue("PAYMENT.APP.QUEUE");
+sender.send(appQueue, message);
+```
+
+**What happens:**
+1. Application publishes to `PAYMENT.APP.QUEUE` (business as usual)
+2. JMS broker duplicates/forwards the message (with all properties) to `KAFKA.AGGREGATION.QUEUE` (via Streaming Queues, Network of Brokers, or Federation)
+3. JMS Source Connector reads from `KAFKA.AGGREGATION.QUEUE` and converts JMS properties to Kafka headers
+4. SMTs use the Kafka headers for routing
+
+## Error Handling
+
+### Dead Letter Queue (DLQ)
+
+Configure DLQ to catch routing errors:
+
+```json
+"kafka.topic": "jms-unrouted-dlq",
+
+"errors.tolerance": "all",
+"errors.deadletterqueue.topic.name": "jms-error-dlq",
+"errors.deadletterqueue.context.headers.enable": "true"
+```
+
+- **kafka.topic** (fallback): Messages without routing headers go here
+- **errors.deadletterqueue.topic.name**: Messages that fail processing go here
+
+## Troubleshooting
+
+### Messages going to wrong topic
+- Check the header value matches topic name exactly (case-sensitive)
+- Verify JMS property is being set correctly
+- Check connector logs for routing decisions
+
+### Messages going to default topic instead of being routed
+- Verify header exists on the message (check in Confluent Cloud UI)
+- Confirm JMS message has the property set
+- For IBM MQ connector: Check connector config has `mq.message.body.jms: "true"`
+
+### Topic not found errors
+- Enable auto topic creation, OR
+- Pre-create all expected topics, OR
+- Use DLQ to catch messages for non-existent topics
+
+## Resources
+
+**Connectors:**
+- [Confluent IBM MQ Source Connector](https://docs.confluent.io/kafka-connectors/ibm-mq-source/current/overview.html)
+- [Confluent ActiveMQ Source Connector](https://docs.confluent.io/kafka-connectors/activemq-source/current/overview.html)
+
+**Single Message Transformations:**
+- [RegexRouter SMT Documentation](https://docs.confluent.io/platform/current/connect/transforms/regexrouter.html)
+- [Kafka Connect Transformations](https://docs.confluent.io/platform/current/connect/transforms/overview.html)
+- [Kafka Connect Predicates](https://docs.confluent.io/platform/current/connect/transforms/predicates.html)
+
+---
+
+## Appendix: IBM MQ Streaming Queue Setup
+
+This section provides detailed setup instructions for IBM MQ Streaming Queues. This is one way to create the aggregated queue that the connector reads from.
 
 **Requirement:** IBM MQ 9.2.3 or later
-
-To set up message duplication using Streaming Queues:
 
 ### 1. Create Aggregation Queue
 
@@ -270,79 +372,7 @@ ALTER QLOCAL(FRAUD.APP.QUEUE) STREAMQ(KAFKA.AGGREGATION.QUEUE) STRMQOS(BESTEF)
 
 **Result:** Legacy applications continue using their queues unchanged, while Kafka receives a real-time copy of all messages via the aggregation queue.
 
-## Prerequisites
-
-This assumes you already have:
-- IBM MQ 9.2.3+ environment with Streaming Queues configured
-- IBM MQ Source Connector deployed in Confluent Cloud
-- MQ messages with routing properties set (e.g., `messageType`)
-- Kafka topics created (or auto-creation enabled)
-
-If you need help setting up the MQ connector, see the [Confluent IBM MQ Source Connector documentation](https://docs.confluent.io/kafka-connectors/ibm-mq-source/current/overview.html).
-
-## Important: MQ Message Properties
-
-For routing to work, your MQ messages **must** include the properties you're routing on.
-
-**Example: Setting MQ properties in Java:**
-
-```java
-TextMessage message = session.createTextMessage(payload);
-message.setStringProperty("messageType", "PAYMENT_DOMESTIC");
-message.setStringProperty("priority", "HIGH");
-message.setStringProperty("businessUnit", "RETAIL");
-
-// Application publishes to its normal queue
-Queue appQueue = session.createQueue("PAYMENT.APP.QUEUE");
-sender.send(appQueue, message);
-```
-
-**What happens:**
-1. Application publishes to `PAYMENT.APP.QUEUE` (business as usual)
-2. MQ automatically duplicates the message (with all properties) to `KAFKA.AGGREGATION.QUEUE` (via `STREAMQ` configuration)
-3. IBM MQ Source Connector reads from `KAFKA.AGGREGATION.QUEUE` and converts MQ properties to Kafka headers
-4. SMTs use the Kafka headers for routing
-
-## Error Handling
-
-### Dead Letter Queue (DLQ)
-
-Configure DLQ to catch routing errors:
-
-```json
-"kafka.topic": "mq-unrouted-dlq",
-
-"errors.tolerance": "all",
-"errors.deadletterqueue.topic.name": "mq-error-dlq",
-"errors.deadletterqueue.context.headers.enable": "true"
-```
-
-- **kafka.topic** (fallback): Messages without routing headers go here
-- **errors.deadletterqueue.topic.name**: Messages that fail processing go here
-
-## Troubleshooting
-
-### Messages going to wrong topic
-- Check the header value matches topic name exactly (case-sensitive)
-- Verify MQ property is being set correctly
-- Check connector logs for routing decisions
-
-### Messages going to default topic instead of being routed
-- Verify header exists on the message (check in Confluent Cloud UI)
-- Confirm MQ message has the property set
-- Check connector config has `mq.message.body.jms: "true"`
-
-### Topic not found errors
-- Enable auto topic creation, OR
-- Pre-create all expected topics, OR
-- Use DLQ to catch messages for non-existent topics
-
-## Resources
-
-- [Confluent IBM MQ Source Connector](https://docs.confluent.io/kafka-connectors/ibm-mq-source/current/overview.html)
-- [RegexRouter SMT Documentation](https://docs.confluent.io/platform/current/connect/transforms/regexrouter.html)
-- [Kafka Connect Transformations](https://docs.confluent.io/platform/current/connect/transforms/overview.html)
-- [Kafka Connect Predicates](https://docs.confluent.io/platform/current/connect/transforms/predicates.html)
+---
 
 ## Contributing
 
