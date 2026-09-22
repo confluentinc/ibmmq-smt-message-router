@@ -1,5 +1,5 @@
 {
-  "name": "mq-source-multi-dimensional-routing",
+  "name": "mq-source-basic-routing",
   "config": {
     "connector.class": "io.confluent.connect.ibm.mq.IbmMQSourceConnector",
     "tasks.max": "1",
@@ -27,13 +27,12 @@
 
     "transforms": "route",
 
-    "transforms.route.type": "org.apache.kafka.connect.transforms.RegexRouter",
-    "transforms.route.regex": ".*",
-    "transforms.route.replacement": "${header:businessUnit}-${header:messageType}",
+    "transforms.route.type": "io.confluent.connect.transforms.ExtractTopic$Header",
+    "transforms.route.field": "messageType",
+    "transforms.route.skip.missing.or.null": "true",
 
-    "_comment_routing": "Routes messages based on TWO headers: businessUnit and messageType",
-    "_comment_examples": "businessUnit=RETAIL + messageType=PAYMENT -> RETAIL-PAYMENT topic",
-    "_comment_examples2": "businessUnit=CORPORATE + messageType=PAYMENT -> CORPORATE-PAYMENT topic",
-    "_comment_usecase": "Useful when you need to segregate messages by multiple dimensions (department, region, type, etc.)"
+    "_comment_routing": "Routes messages based on 'messageType' header value",
+    "_comment_examples": "messageType=PAYMENT_DOMESTIC -> PAYMENT_DOMESTIC topic, messageType=FRAUD_ALERT -> FRAUD_ALERT topic",
+    "_comment_fallback": "Messages without messageType header go to kafka.topic (mq-unrouted-dlq)"
   }
 }

@@ -4,7 +4,7 @@
 # Most CI targets are no-ops since there's no code to build or test
 
 help:
-	@echo "IBM MQ SMT Message Router - Configuration Examples Repository"
+	@echo "JMS SMT Message Router - Configuration Examples Repository"
 	@echo ""
 	@echo "Available targets:"
 	@echo "  show-args       - Display build arguments"
@@ -18,7 +18,7 @@ help:
 show-args:
 	@echo "Repository: ibmmq-smt-message-router"
 	@echo "Type: Configuration Examples"
-	@echo "Contents: SMT routing patterns for IBM MQ Source Connector"
+	@echo "Contents: SMT routing patterns for JMS Source Connectors (IBM MQ, ActiveMQ)"
 
 init-ci:
 	@echo "Initializing CI environment..."
@@ -32,7 +32,7 @@ test: validate-json validate-examples
 
 validate-json:
 	@echo "Validating JSON configuration files..."
-	@for file in examples/*.json; do \
+	@for file in examples/ibm-mq/*.json examples/activemq/*.json; do \
 		echo "Checking $$file..."; \
 		python3 -m json.tool $$file > /dev/null || exit 1; \
 	done
@@ -40,13 +40,18 @@ validate-json:
 
 validate-examples:
 	@echo "Validating example configurations..."
-	@echo "Checking required files exist..."
-	@test -f examples/basic-routing.json || (echo "Missing basic-routing.json" && exit 1)
-	@test -f examples/routing-with-prefix.json || (echo "Missing routing-with-prefix.json" && exit 1)
-	@test -f examples/multi-dimensional-routing.json || (echo "Missing multi-dimensional-routing.json" && exit 1)
-	@test -f examples/routing-with-metadata.json || (echo "Missing routing-with-metadata.json" && exit 1)
-	@test -f examples/conditional-routing.json || (echo "Missing conditional-routing.json" && exit 1)
-	@test -f examples/README.md || (echo "Missing examples/README.md" && exit 1)
+	@echo "Checking required IBM MQ example files exist..."
+	@test -f examples/ibm-mq/basic-routing.json || (echo "Missing ibm-mq/basic-routing.json" && exit 1)
+	@test -f examples/ibm-mq/routing-with-prefix.json || (echo "Missing ibm-mq/routing-with-prefix.json" && exit 1)
+	@test -f examples/ibm-mq/multi-dimensional-routing.json || (echo "Missing ibm-mq/multi-dimensional-routing.json" && exit 1)
+	@test -f examples/ibm-mq/routing-with-metadata.json || (echo "Missing ibm-mq/routing-with-metadata.json" && exit 1)
+	@test -f examples/ibm-mq/conditional-routing.json || (echo "Missing ibm-mq/conditional-routing.json" && exit 1)
+	@echo "Checking required ActiveMQ example files exist..."
+	@test -f examples/activemq/basic-routing.json || (echo "Missing activemq/basic-routing.json" && exit 1)
+	@test -f examples/activemq/routing-with-prefix.json || (echo "Missing activemq/routing-with-prefix.json" && exit 1)
+	@test -f examples/activemq/multi-dimensional-routing.json || (echo "Missing activemq/multi-dimensional-routing.json" && exit 1)
+	@test -f examples/activemq/routing-with-metadata.json || (echo "Missing activemq/routing-with-metadata.json" && exit 1)
+	@test -f examples/activemq/conditional-routing.json || (echo "Missing activemq/conditional-routing.json" && exit 1)
 	@echo "✓ All required example files present"
 
 release-ci:

@@ -1,282 +1,170 @@
 # SMT Routing Configuration Examples
 
-This directory contains complete connector configuration examples demonstrating different SMT routing patterns for IBM MQ Source Connector.
+This directory contains complete connector configuration examples demonstrating header-based topic routing patterns for JMS Source Connectors.
 
-## Examples Overview
+## Supported JMS Providers
 
-Each JSON file is a complete connector configuration with focus on the `transforms` section. Replace the `${VARIABLE}` placeholders with your actual MQ connection details.
+Examples are available for multiple JMS providers:
 
-### 1. basic-routing.json
+- **[ibm-mq/](ibm-mq/)** - IBM MQ Source Connector configurations
+- **[activemq/](activemq/)** - ActiveMQ Source Connector configurations
 
-**Pattern:** Simple header-based routing
+**Note:** SMT configuration (`transforms` section) is identical across providers. Only connector-specific properties (connection details, credentials) differ.
 
-**Configuration:**
-```json
-"transforms": "route",
-"transforms.route.replacement": "${header:messageType}"
+## Available Routing Patterns
+
+Each directory contains 5 routing patterns:
+
+| Pattern | Description | Key SMT |
+|---------|-------------|---------|
+| **basic-routing.json** | Route by messageType header | ExtractTopic$Header |
+| **routing-with-prefix.json** | Add namespace prefix (e.g., `banking-PAYMENT`) | ExtractTopic$Header + RegexRouter |
+| **multi-dimensional-routing.json** | Route by combined routing key | ExtractTopic$Header |
+| **routing-with-metadata.json** | Enrich payload then route | InsertField + ExtractTopic$Header |
+| **conditional-routing.json** | Route based on header presence | Predicates + ExtractTopic$Header |
+
+## Quick Start
+
+### 1. Choose Your Provider
+
+Navigate to the directory for your JMS provider:
+- IBM MQ: `ibm-mq/`
+- ActiveMQ: `activemq/`
+
+### 2. Select a Routing Pattern
+
+Choose the JSON file that matches your routing requirements.
+
+### 3. Replace Placeholders
+
+Update connection details:
+
+**IBM MQ:**
+```
+${MQ_HOSTNAME}      → your-mq-server.example.com
+${MQ_PORT}          → 1414
+${MQ_QUEUE_MANAGER} → QM1
+${MQ_CHANNEL}       → SYSTEM.DEF.SVRCONN
+${MQ_USERNAME}      → your-username
+${MQ_PASSWORD}      → your-password
 ```
 
-**Routing Logic:**
-- Reads `messageType` header from Kafka message (originally MQ property)
-- Routes message to topic matching the header value
-
-**Example:**
+**ActiveMQ:**
 ```
-messageType: PAYMENT_DOMESTIC  → Topic: PAYMENT_DOMESTIC
-messageType: FRAUD_ALERT       → Topic: FRAUD_ALERT
-No messageType header          → Topic: mq-unrouted-dlq (fallback)
+${ACTIVEMQ_HOST}     → your-activemq-server.example.com
+${ACTIVEMQ_USERNAME} → your-username
+${ACTIVEMQ_PASSWORD} → your-password
 ```
 
-**Use When:**
-- You have a single routing dimension
-- Topic names match header values exactly
-- Simplest routing scenario
+### 4. Deploy Connector
 
----
+Deploy via Confluent Cloud:
 
-### 2. routing-with-prefix.json
-
-**Pattern:** Namespaced topic routing
-
-**Configuration:**
-```json
-"transforms": "route",
-"transforms.route.replacement": "banking-${header:messageType}"
-```
-
-**Routing Logic:**
-- Adds `banking-` prefix to all routed topics
-- Useful for topic namespace organization
-
-**Example:**
-```
-messageType: PAYMENT_DOMESTIC  → Topic: banking-PAYMENT_DOMESTIC
-messageType: FRAUD_ALERT       → Topic: banking-FRAUD_ALERT
-```
-
-**Use When:**
-- You want to namespace topics (e.g., by system, domain, or team)
-- Avoid topic name conflicts with other systems
-- Maintain consistent topic naming conventions
-
----
-
-### 3. multi-dimensional-routing.json
-
-**Pattern:** Route by multiple headers
-
-**Configuration:**
-```json
-"transforms": "route",
-"transforms.route.replacement": "${header:businessUnit}-${header:messageType}"
-```
-
-**Routing Logic:**
-- Combines two headers to create topic name
-- Creates topics like `RETAIL-PAYMENT`, `CORPORATE-PAYMENT`
-
-**Example:**
-```
-businessUnit: RETAIL    + messageType: PAYMENT  → Topic: RETAIL-PAYMENT
-businessUnit: CORPORATE + messageType: PAYMENT  → Topic: CORPORATE-PAYMENT
-businessUnit: RETAIL    + messageType: FRAUD    → Topic: RETAIL-FRAUD
-```
-
-**Use When:**
-- Need to segregate messages by multiple dimensions
-- Different departments/regions need separate topics
-- Want to partition data by business context
-
----
-
-### 4. routing-with-metadata.json
-
-**Pattern:** Enrich messages before routing
-
-**Configuration:**
-```json
-"transforms": "addTimestamp,addSource,route",
-"transforms.addTimestamp.type": "InsertField$Value",
-"transforms.addSource.type": "InsertField$Value",
-"transforms.route.type": "RegexRouter"
-```
-
-**Routing Logic:**
-- **Step 1:** Add `kafkaIngestTime` field to message payload
-- **Step 2:** Add `sourceSystem: CORE_BANKING_MQ` field
-- **Step 3:** Route based on `messageType` header
-
-**Example:**
-```json
-// Original message
-{"transactionId": "123", "amount": 1000}
-
-// After enrichment
-{
-  "transactionId": "123",
-  "amount": 1000,
-  "kafkaIngestTime": "2026-08-21T10:30:00Z",
-  "sourceSystem": "CORE_BANKING_MQ"
-}
-```
-
-**Use When:**
-- Need audit trail timestamps
-- Want to track message source/lineage
-- Add metadata for downstream processing
-
----
-
-### 5. conditional-routing.json
-
-**Pattern:** Different routing rules based on conditions
-
-**Configuration:**
-```json
-"transforms": "routeHighPriority,routeNormal",
-"predicates": "isHighPriority",
-
-"predicates.isHighPriority.type": "HasHeaderKey",
-"predicates.isHighPriority.name": "priority",
-
-"transforms.routeHighPriority.replacement": "${header:messageType}-priority",
-"transforms.routeHighPriority.predicate": "isHighPriority",
-
-"transforms.routeNormal.replacement": "${header:messageType}",
-"transforms.routeNormal.negate": "true"
-```
-
-**Routing Logic:**
-- If message has `priority` header → Route to `{messageType}-priority` topic
-- If message lacks `priority` header → Route to `{messageType}` topic
-
-**Example:**
-```
-priority: HIGH + messageType: PAYMENT  → Topic: PAYMENT-priority
-messageType: PAYMENT (no priority)     → Topic: PAYMENT
-```
-
-**Use When:**
-- Need separate processing for urgent/high-priority messages
-- Want to apply different retention policies by priority
-- SLA requirements differ by message type
-
----
-
-## Using These Examples
-
-### Step 1: Choose Your Pattern
-
-Select the example that matches your routing requirements.
-
-### Step 2: Copy Configuration
-
-Copy the entire JSON configuration from the example file.
-
-### Step 3: Replace Placeholders
-
-Update these values with your actual MQ connection details:
-```
-${MQ_HOSTNAME}        → your-mq-server.example.com
-${MQ_PORT}            → 1414
-${MQ_QUEUE_MANAGER}   → QM1
-${MQ_CHANNEL}         → SYSTEM.DEF.SVRCONN
-${MQ_USERNAME}        → your-username
-${MQ_PASSWORD}        → your-password (or use secrets: ${secret:mq-password})
-```
-
-### Step 4: Deploy Connector
-
-Deploy via Confluent Cloud UI or CLI:
-
-**Via UI:**
-1. Go to Connectors → Add Connector → IBM MQ Source
+**UI:**
+1. Go to Connectors → Add Connector → (IBM MQ Source or ActiveMQ Source)
 2. Paste the configuration
 3. Launch
 
-**Via CLI:**
+**CLI:**
 ```bash
-confluent connect cluster create --config-file basic-routing.json
+confluent connect cluster create --config-file ibm-mq/basic-routing.json
 ```
 
-### Step 5: Verify Routing
+### 5. Verify Routing
 
-1. Send test messages to MQ with appropriate headers
-2. Check Confluent Cloud Topics to see messages routed correctly
+1. Send test JMS messages with appropriate properties (e.g., `messageType: PAYMENT`)
+2. Check Confluent Cloud Topics to see messages routed to correct topics
 
-## Important Notes
+## Important Requirements
 
-### MQ Message Properties Required
+### JMS Message Properties Must Be Set
 
-For routing to work, MQ messages MUST have the properties set:
+For routing to work, JMS messages **must** include the routing properties:
 
 ```java
 // Java example
-TextMessage msg = session.createTextMessage(payload);
-msg.setStringProperty("messageType", "PAYMENT_DOMESTIC");
-msg.setStringProperty("priority", "HIGH");
-msg.setStringProperty("businessUnit", "RETAIL");
+TextMessage message = session.createTextMessage(payload);
+message.setStringProperty("messageType", "PAYMENT_DOMESTIC");
+message.setStringProperty("priority", "HIGH");
+
+// Application publishes to normal queue
+Queue appQueue = session.createQueue("PAYMENT.APP.QUEUE");
+sender.send(appQueue, message);
 ```
 
-### Connector Must Parse MQ Properties
+### JMS Properties → Kafka Headers
 
-Ensure your connector configuration includes:
+The JMS Source Connector automatically converts JMS properties to Kafka headers, which the SMTs then use for routing.
+
+**For IBM MQ Connector:**
 ```json
 "mq.message.body.jms": "true"
 ```
 
-This tells the connector to parse MQ/JMS properties and convert them to Kafka headers.
+This ensures MQ properties are parsed and converted to Kafka headers.
 
 ### Topic Creation
 
-Topics must exist before routing (unless auto-creation is enabled):
+Ensure destination topics exist before routing:
 
 ```bash
-# Create topics manually if needed
+# Create topics manually
 confluent kafka topic create PAYMENT_DOMESTIC --partitions 3
 confluent kafka topic create FRAUD_ALERT --partitions 3
 ```
 
-Or enable auto-creation in your Kafka cluster settings.
+Or enable auto topic creation in your Kafka cluster settings.
 
-## Combining Patterns
+## Pattern Details
 
-You can mix and match these patterns. For example:
+For detailed explanations of each routing pattern, see the main [README](../README.md) which includes:
+- How each pattern works
+- Sample message routing examples
+- Use cases for each pattern
+- SMT configuration chains
 
-**Enrichment + Multi-dimensional routing:**
+## Key SMT: ExtractTopic$Header
+
+The primary SMT used for header-based routing is **ExtractTopic$Header**:
+
 ```json
-"transforms": "addTimestamp,route",
-"transforms.addTimestamp.type": "InsertField$Value",
-"transforms.addTimestamp.timestamp.field": "ingestedAt",
-"transforms.route.replacement": "${header:businessUnit}-${header:messageType}"
+"transforms": "route",
+"transforms.route.type": "io.confluent.connect.transforms.ExtractTopic$Header",
+"transforms.route.field": "messageType",
+"transforms.route.skip.missing.or.null": "true"
 ```
 
-**Prefix + Conditional routing:**
-```json
-"transforms": "routeHighPriority,routeNormal",
-"transforms.routeHighPriority.replacement": "banking-${header:messageType}-priority",
-"transforms.routeNormal.replacement": "banking-${header:messageType}"
-```
+This SMT:
+- Reads the specified header value (`messageType`)
+- Uses that value as the destination topic name
+- Falls back to `kafka.topic` if header is missing
+
+**Note:** The standard `RegexRouter` SMT does NOT support `${header:xxx}` interpolation syntax. Use `ExtractTopic$Header` for header-based routing.
 
 ## Troubleshooting
 
-**Messages not routing:**
-- Check MQ messages have the required properties set
-- Verify `mq.message.body.jms: "true"` in connector config
-- Look for messages in fallback topic (`kafka.topic` config)
+**Messages not routing to expected topics:**
+- Verify JMS properties are set on source messages
+- Check connector config has JMS property parsing enabled
+- Look for messages in fallback/DLQ topic
 
-**Headers missing:**
-- Confirm MQ properties are set correctly
-- Check connector is using DefaultRecordBuilder
-- Verify JMS message format
+**Headers missing from Kafka records:**
+- Confirm JMS properties are set correctly on source messages
+- For IBM MQ: verify `mq.message.body.jms: "true"` is set
+- Check connector logs for property conversion errors
 
-**Topic not found:**
-- Pre-create topics, or enable auto-creation
-- Check topic name matches exactly (case-sensitive)
-- Review connector logs for errors
+**Topic not found errors:**
+- Pre-create all expected destination topics, or
+- Enable auto topic creation in Kafka cluster settings
 
 ## Resources
 
+**Connector Documentation:**
+- [IBM MQ Source Connector](https://docs.confluent.io/kafka-connectors/ibm-mq-source/current/overview.html)
+- [ActiveMQ Source Connector](https://docs.confluent.io/kafka-connectors/activemq-source/current/overview.html)
+
+**SMT Documentation:**
+- [ExtractTopic SMT](https://docs.confluent.io/platform/current/connect/transforms/extracttopic.html)
 - [RegexRouter SMT](https://docs.confluent.io/platform/current/connect/transforms/regexrouter.html)
-- [InsertField SMT](https://docs.confluent.io/platform/current/connect/transforms/insertfield.html)
+- [Kafka Connect Transformations](https://docs.confluent.io/platform/current/connect/transforms/overview.html)
 - [Kafka Connect Predicates](https://docs.confluent.io/platform/current/connect/transforms/predicates.html)
