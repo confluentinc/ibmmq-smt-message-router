@@ -252,12 +252,56 @@ Apply different routing rules based on conditions:
 - Message with `messageType: ACCOUNT_TRANSACTION` (no priority header) → Routes to `ACCOUNT_TRANSACTION` topic
 - High-priority messages get dedicated topics for faster processing, separate consumer groups, and stricter SLAs
 
+## IBM MQ Streaming Queue Configuration
+
+**Requirement:** IBM MQ 9.2.3 or later
+
+To set up message duplication using Streaming Queues:
+
+### 1. Create Aggregation Queue
+
+```mqsc
+DEFINE QLOCAL(KAFKA.AGGREGATION.QUEUE) MAXDEPTH(100000)
+```
+
+### 2. Configure Streaming on Application Queues
+
+Point your existing application queues to duplicate messages to the aggregation queue:
+
+```mqsc
+ALTER QLOCAL(PAYMENT.APP.QUEUE) STREAMQ(KAFKA.AGGREGATION.QUEUE) STRMQOS(BESTEF)
+ALTER QLOCAL(ACCOUNT.APP.QUEUE) STREAMQ(KAFKA.AGGREGATION.QUEUE) STRMQOS(BESTEF)
+ALTER QLOCAL(FRAUD.APP.QUEUE) STREAMQ(KAFKA.AGGREGATION.QUEUE) STRMQOS(BESTEF)
+```
+
+**Configuration Options:**
+- `STREAMQ`: Target queue for duplicated messages
+- `STRMQOS(BESTEF)`: Best Effort quality of service - if aggregation queue fills up, it won't block the original application queue
+
+### 3. Configure Connector to Read from Aggregation Queue
+
+```json
+{
+  "connector.class": "io.confluent.connect.ibm.mq.IbmMQSourceConnector",
+  "jms.destination.name": "KAFKA.AGGREGATION.QUEUE",
+  "jms.destination.type": "queue"
+}
+```
+
+**Result:** Legacy applications continue using their queues unchanged, while Kafka receives a real-time copy of all messages via the aggregation queue.
+
 ## Prerequisites
 
 This assumes you already have:
+<<<<<<< HEAD
 - JMS message broker environment with message aggregation configured (Streaming Queues, Network of Brokers, or Federation)
 - JMS Source Connector deployed in Confluent Cloud (IBM MQ, ActiveMQ, or Artemis)
 - JMS messages with routing properties set (e.g., `messageType`)
+=======
+- IBM MQ 9.2.3+ environment with Streaming Queues configured
+- IBM MQ Source Connector deployed in Confluent Cloud
+- MQ messages with routing properties set (e.g., `messageType`)
+>>>>>>> origin/master
 - Kafka topics created (or auto-creation enabled)
 
 **Connector Documentation:**
@@ -283,8 +327,13 @@ sender.send(appQueue, message);
 
 **What happens:**
 1. Application publishes to `PAYMENT.APP.QUEUE` (business as usual)
+<<<<<<< HEAD
 2. JMS broker duplicates/forwards the message (with all properties) to `KAFKA.AGGREGATION.QUEUE` (via Streaming Queues, Network of Brokers, or Federation)
 3. JMS Source Connector reads from `KAFKA.AGGREGATION.QUEUE` and converts JMS properties to Kafka headers
+=======
+2. MQ automatically duplicates the message (with all properties) to `KAFKA.AGGREGATION.QUEUE` (via `STREAMQ` configuration)
+3. IBM MQ Source Connector reads from `KAFKA.AGGREGATION.QUEUE` and converts MQ properties to Kafka headers
+>>>>>>> origin/master
 4. SMTs use the Kafka headers for routing
 
 ## Error Handling
