@@ -1,0 +1,39 @@
+{
+  "name": "activemq-source-routing-with-prefix",
+  "config": {
+    "connector.class": "io.confluent.connect.activemq.ActiveMQSourceConnector",
+    "tasks.max": "1",
+
+    "kafka.topic": "jms-unrouted-dlq",
+
+    "activemq.url": "tcp://${ACTIVEMQ_HOST}:61616",
+    "activemq.username": "${ACTIVEMQ_USERNAME}",
+    "activemq.password": "${ACTIVEMQ_PASSWORD}",
+
+    "jms.destination.name": "KAFKA.AGGREGATION.QUEUE",
+    "jms.destination.type": "queue",
+
+    "key.converter": "org.apache.kafka.connect.storage.StringConverter",
+    "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "value.converter.schemas.enable": "false",
+
+    "_comment_transforms": "===== SMT CHAIN: EXTRACT TOPIC + ADD PREFIX =====",
+
+    "transforms": "extractTopic,addPrefix",
+
+    "_comment_step1": "Step 1: Extract topic name from messageType header",
+    "transforms.extractTopic.type": "io.confluent.connect.transforms.ExtractTopic$Header",
+    "transforms.extractTopic.field": "messageType",
+    "transforms.extractTopic.skip.missing.or.null": "true",
+
+    "_comment_step2": "Step 2: Add 'banking-' prefix to the extracted topic",
+    "transforms.addPrefix.type": "org.apache.kafka.connect.transforms.RegexRouter",
+    "transforms.addPrefix.regex": ".*",
+    "transforms.addPrefix.replacement": "banking-$0",
+
+    "_comment_routing": "Routes messages with 'banking-' prefix added to topic name",
+    "_comment_examples": "messageType=PAYMENT_DOMESTIC -> banking-PAYMENT_DOMESTIC topic",
+    "_comment_usecase": "Useful for namespacing topics to avoid conflicts with other systems",
+    "_comment_note": "SMT configuration is identical across JMS providers"
+  }
+}

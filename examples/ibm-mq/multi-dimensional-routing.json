@@ -1,5 +1,5 @@
 {
-  "name": "mq-source-routing-with-prefix",
+  "name": "mq-source-multi-dimensional-routing",
   "config": {
     "connector.class": "io.confluent.connect.ibm.mq.IbmMQSourceConnector",
     "tasks.max": "1",
@@ -27,12 +27,14 @@
 
     "transforms": "route",
 
-    "transforms.route.type": "org.apache.kafka.connect.transforms.RegexRouter",
-    "transforms.route.regex": ".*",
-    "transforms.route.replacement": "banking-${header:messageType}",
+    "transforms.route.type": "io.confluent.connect.transforms.ExtractTopic$Header",
+    "transforms.route.field": "routingKey",
+    "transforms.route.skip.missing.or.null": "true",
 
-    "_comment_routing": "Routes messages with 'banking-' prefix added to topic name",
-    "_comment_examples": "messageType=PAYMENT_DOMESTIC -> banking-PAYMENT_DOMESTIC topic",
-    "_comment_usecase": "Useful for namespacing topics to avoid conflicts with other systems"
+    "_comment_routing": "Routes messages based on combined routing key header",
+    "_comment_application": "Application must set 'routingKey' JMS property with combined value (e.g., 'RETAIL-PAYMENT')",
+    "_comment_examples": "routingKey=RETAIL-PAYMENT -> RETAIL-PAYMENT topic, routingKey=CORPORATE-PAYMENT -> CORPORATE-PAYMENT topic",
+    "_comment_usecase": "Useful when you need to segregate messages by multiple dimensions (department, region, type, etc.)",
+    "_comment_note": "Standard SMTs cannot combine multiple headers - application must pre-combine values into a single routing header"
   }
 }
