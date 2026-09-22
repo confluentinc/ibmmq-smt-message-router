@@ -5,9 +5,9 @@ This directory contains a Mermaid diagram showing how SMT-based routing works.
 ## smt-routing.mmd
 
 Visualizes the flow:
-1. MQ message with properties
-2. Connector converts properties to Kafka headers
-3. RegexRouter SMT reads header and determines topic
+1. JMS message with properties
+2. JMS Source Connector converts properties to Kafka headers
+3. ExtractTopic$Header SMT reads header value and determines topic
 4. Message routes to appropriate Kafka topic
 
 ## Viewing the Diagram

@@ -1,17 +1,17 @@
 %% SMT Routing Logic - Simplified Diagram
 
 flowchart LR
-    subgraph mq["MQ Message"]
-        props["MQ Properties:<br/>messageType=PAYMENT<br/>priority=HIGH<br/>businessUnit=RETAIL"]
+    subgraph jms["JMS Message"]
+        props["JMS Properties:<br/>messageType=PAYMENT<br/>priority=HIGH<br/>routingKey=RETAIL-PAYMENT"]
     end
 
-    subgraph connector["IBM MQ Source Connector"]
-        convert["Convert MQ Properties<br/>→ Kafka Headers"]
+    subgraph connector["JMS Source Connector"]
+        convert["Convert JMS Properties<br/>→ Kafka Headers"]
     end
 
-    subgraph smt["RegexRouter SMT"]
-        read["Read Header:<br/>${header:messageType}"]
-        determine["Determine Topic:<br/>PAYMENT"]
+    subgraph smt["ExtractTopic$Header SMT"]
+        read["Extract Header Value:<br/>field: messageType"]
+        determine["Use as Topic Name:<br/>PAYMENT"]
     end
 
     subgraph kafka["Kafka"]
@@ -23,7 +23,7 @@ flowchart LR
     read --> determine
     determine --> topic
 
-    style mq fill:#134a8e,stroke:#0c2d57,color:#fff
+    style jms fill:#134a8e,stroke:#0c2d57,color:#fff
     style connector fill:#7b68ee,stroke:#483d8b,color:#fff
     style smt fill:#ff6b6b,stroke:#c92a2a,color:#fff
     style kafka fill:#51cf66,stroke:#2b8a3e,color:#000
