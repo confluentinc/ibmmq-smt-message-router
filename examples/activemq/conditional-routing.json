@@ -1,0 +1,54 @@
+{
+  "name": "activemq-source-conditional-routing",
+  "config": {
+    "connector.class": "io.confluent.connect.activemq.ActiveMQSourceConnector",
+    "tasks.max": "1",
+
+    "kafka.topic": "jms-unrouted-dlq",
+
+    "activemq.url": "tcp://${ACTIVEMQ_HOST}:61616",
+    "activemq.username": "${ACTIVEMQ_USERNAME}",
+    "activemq.password": "${ACTIVEMQ_PASSWORD}",
+
+    "jms.destination.name": "KAFKA.AGGREGATION.QUEUE",
+    "jms.destination.type": "queue",
+
+    "key.converter": "org.apache.kafka.connect.storage.StringConverter",
+    "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "value.converter.schemas.enable": "false",
+
+    "_comment_transforms": "===== CONDITIONAL ROUTING WITH PREDICATES =====",
+
+    "transforms": "extractTopic,addPrioritySuffix,extractTopicNormal",
+    "predicates": "hasPriorityHeader",
+
+    "_comment_predicate": "Define condition: message has 'priority' header (checks existence, not value)",
+    "predicates.hasPriorityHeader.type": "org.apache.kafka.connect.transforms.predicates.HasHeaderKey",
+    "predicates.hasPriorityHeader.name": "priority",
+
+    "_comment_transform1": "Transform 1: Extract topic from messageType header (for priority messages)",
+    "transforms.extractTopic.type": "io.confluent.connect.transforms.ExtractTopic$Header",
+    "transforms.extractTopic.field": "messageType",
+    "transforms.extractTopic.skip.missing.or.null": "true",
+    "transforms.extractTopic.predicate": "hasPriorityHeader",
+
+    "_comment_transform2": "Transform 2: Add -priority suffix to topic name (for priority messages)",
+    "transforms.addPrioritySuffix.type": "org.apache.kafka.connect.transforms.RegexRouter",
+    "transforms.addPrioritySuffix.regex": ".*",
+    "transforms.addPrioritySuffix.replacement": "$0-priority",
+    "transforms.addPrioritySuffix.predicate": "hasPriorityHeader",
+
+    "_comment_transform3": "Transform 3: Extract topic from messageType header (for normal messages)",
+    "transforms.extractTopicNormal.type": "io.confluent.connect.transforms.ExtractTopic$Header",
+    "transforms.extractTopicNormal.field": "messageType",
+    "transforms.extractTopicNormal.skip.missing.or.null": "true",
+    "transforms.extractTopicNormal.predicate": "hasPriorityHeader",
+    "transforms.extractTopicNormal.negate": "true",
+
+    "_comment_examples": "With priority header + messageType=PAYMENT -> PAYMENT-priority topic",
+    "_comment_examples2": "Without priority header + messageType=PAYMENT -> PAYMENT topic",
+    "_comment_usecase": "Useful for separating messages with priority header into different topics",
+    "_comment_limitation": "HasHeaderKey only checks header existence, not value - all messages with 'priority' header (any value) go to priority topics",
+    "_comment_note": "SMT configuration is identical across JMS providers"
+  }
+}
