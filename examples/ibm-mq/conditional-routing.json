@@ -25,28 +25,35 @@
 
     "_comment_transforms": "===== CONDITIONAL ROUTING WITH PREDICATES =====",
 
-    "transforms": "routeHighPriority,routeNormal",
-    "predicates": "isHighPriority",
+    "transforms": "extractTopic,addPrioritySuffix,extractTopicNormal",
+    "predicates": "hasPriorityHeader",
 
-    "_comment_predicate": "Define condition: message has 'priority' header with value 'HIGH'",
-    "predicates.isHighPriority.type": "org.apache.kafka.connect.transforms.predicates.HasHeaderKey",
-    "predicates.isHighPriority.name": "priority",
+    "_comment_predicate": "Define condition: message has 'priority' header (checks existence, not value)",
+    "predicates.hasPriorityHeader.type": "org.apache.kafka.connect.transforms.predicates.HasHeaderKey",
+    "predicates.hasPriorityHeader.name": "priority",
 
-    "_comment_transform1": "Transform 1: Route high-priority messages to priority topics",
-    "transforms.routeHighPriority.type": "org.apache.kafka.connect.transforms.RegexRouter",
-    "transforms.routeHighPriority.regex": ".*",
-    "transforms.routeHighPriority.replacement": "${header:messageType}-priority",
-    "transforms.routeHighPriority.predicate": "isHighPriority",
+    "_comment_transform1": "Transform 1: Extract topic from messageType header (for priority messages)",
+    "transforms.extractTopic.type": "io.confluent.connect.transforms.ExtractTopic$Header",
+    "transforms.extractTopic.field": "messageType",
+    "transforms.extractTopic.skip.missing.or.null": "true",
+    "transforms.extractTopic.predicate": "hasPriorityHeader",
 
-    "_comment_transform2": "Transform 2: Route normal messages to standard topics",
-    "transforms.routeNormal.type": "org.apache.kafka.connect.transforms.RegexRouter",
-    "transforms.routeNormal.regex": ".*",
-    "transforms.routeNormal.replacement": "${header:messageType}",
-    "transforms.routeNormal.predicate": "isHighPriority",
-    "transforms.routeNormal.negate": "true",
+    "_comment_transform2": "Transform 2: Add -priority suffix to topic name (for priority messages)",
+    "transforms.addPrioritySuffix.type": "org.apache.kafka.connect.transforms.RegexRouter",
+    "transforms.addPrioritySuffix.regex": ".*",
+    "transforms.addPrioritySuffix.replacement": "$0-priority",
+    "transforms.addPrioritySuffix.predicate": "hasPriorityHeader",
 
-    "_comment_examples": "priority=HIGH + messageType=PAYMENT -> PAYMENT-priority topic",
-    "_comment_examples2": "priority=NORMAL + messageType=PAYMENT -> PAYMENT topic",
-    "_comment_usecase": "Useful for separating high-priority/urgent messages into different topics for specialized processing"
+    "_comment_transform3": "Transform 3: Extract topic from messageType header (for normal messages)",
+    "transforms.extractTopicNormal.type": "io.confluent.connect.transforms.ExtractTopic$Header",
+    "transforms.extractTopicNormal.field": "messageType",
+    "transforms.extractTopicNormal.skip.missing.or.null": "true",
+    "transforms.extractTopicNormal.predicate": "hasPriorityHeader",
+    "transforms.extractTopicNormal.negate": "true",
+
+    "_comment_examples": "With priority header + messageType=PAYMENT -> PAYMENT-priority topic",
+    "_comment_examples2": "Without priority header + messageType=PAYMENT -> PAYMENT topic",
+    "_comment_usecase": "Useful for separating messages with priority header into different topics",
+    "_comment_limitation": "HasHeaderKey only checks header existence, not value - all messages with 'priority' header (any value) go to priority topics"
   }
 }

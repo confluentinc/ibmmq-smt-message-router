@@ -16,7 +16,7 @@ help:
 	@echo "  testbreak-after - Post-test cleanup"
 
 show-args:
-	@echo "Repository: jms-smt-message-router"
+	@echo "Repository: ibmmq-smt-message-router"
 	@echo "Type: Configuration Examples"
 	@echo "Contents: SMT routing patterns for JMS Source Connectors (IBM MQ, ActiveMQ)"
 

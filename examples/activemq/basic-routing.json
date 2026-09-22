@@ -21,9 +21,9 @@
 
     "transforms": "route",
 
-    "transforms.route.type": "org.apache.kafka.connect.transforms.RegexRouter",
-    "transforms.route.regex": ".*",
-    "transforms.route.replacement": "${header:messageType}",
+    "transforms.route.type": "io.confluent.connect.transforms.ExtractTopic$Header",
+    "transforms.route.field": "messageType",
+    "transforms.route.skip.missing.or.null": "true",
 
     "_comment_routing": "Routes messages based on 'messageType' header value",
     "_comment_examples": "messageType=PAYMENT_DOMESTIC -> PAYMENT_DOMESTIC topic, messageType=FRAUD_ALERT -> FRAUD_ALERT topic",

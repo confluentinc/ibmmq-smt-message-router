@@ -31,9 +31,9 @@
     "transforms.addSource.static.value": "CORE_BANKING_MQ",
 
     "_comment_step3": "Step 3: Route based on messageType header",
-    "transforms.route.type": "org.apache.kafka.connect.transforms.RegexRouter",
-    "transforms.route.regex": ".*",
-    "transforms.route.replacement": "${header:messageType}",
+    "transforms.route.type": "io.confluent.connect.transforms.ExtractTopic$Header",
+    "transforms.route.field": "messageType",
+    "transforms.route.skip.missing.or.null": "true",
 
     "_comment_result": "Messages are enriched with metadata AND routed to appropriate topics",
     "_comment_usecase": "Useful for audit trails, tracking message lineage, and adding system context",

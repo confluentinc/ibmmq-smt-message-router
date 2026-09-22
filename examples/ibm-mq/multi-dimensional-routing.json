@@ -27,13 +27,14 @@
 
     "transforms": "route",
 
-    "transforms.route.type": "org.apache.kafka.connect.transforms.RegexRouter",
-    "transforms.route.regex": ".*",
-    "transforms.route.replacement": "${header:businessUnit}-${header:messageType}",
+    "transforms.route.type": "io.confluent.connect.transforms.ExtractTopic$Header",
+    "transforms.route.field": "routingKey",
+    "transforms.route.skip.missing.or.null": "true",
 
-    "_comment_routing": "Routes messages based on TWO headers: businessUnit and messageType",
-    "_comment_examples": "businessUnit=RETAIL + messageType=PAYMENT -> RETAIL-PAYMENT topic",
-    "_comment_examples2": "businessUnit=CORPORATE + messageType=PAYMENT -> CORPORATE-PAYMENT topic",
-    "_comment_usecase": "Useful when you need to segregate messages by multiple dimensions (department, region, type, etc.)"
+    "_comment_routing": "Routes messages based on combined routing key header",
+    "_comment_application": "Application must set 'routingKey' JMS property with combined value (e.g., 'RETAIL-PAYMENT')",
+    "_comment_examples": "routingKey=RETAIL-PAYMENT -> RETAIL-PAYMENT topic, routingKey=CORPORATE-PAYMENT -> CORPORATE-PAYMENT topic",
+    "_comment_usecase": "Useful when you need to segregate messages by multiple dimensions (department, region, type, etc.)",
+    "_comment_note": "Standard SMTs cannot combine multiple headers - application must pre-combine values into a single routing header"
   }
 }

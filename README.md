@@ -58,11 +58,17 @@ Add this SMT configuration to your JMS Source Connector:
   "kafka.topic": "jms-default",
   
   "transforms": "route",
-  "transforms.route.type": "org.apache.kafka.connect.transforms.RegexRouter",
-  "transforms.route.regex": ".*",
-  "transforms.route.replacement": "${header:messageType}"
+  "transforms.route.type": "io.confluent.connect.transforms.ExtractTopic$Header",
+  "transforms.route.field": "messageType",
+  "transforms.route.skip.missing.or.null": "true"
 }
 ```
+
+**How it works:**
+1. The JMS Source Connector converts JMS message properties to Kafka headers
+2. The `ExtractTopic$Header` SMT reads the `messageType` header value
+3. That value becomes the destination topic name
+4. Messages without the header fall back to the `kafka.topic` setting
 
 **Result:**
 - Message with `messageType: PAYMENT_DOMESTIC` → Routes to `PAYMENT_DOMESTIC` topic
@@ -83,7 +89,7 @@ See the [examples/](examples/) directory for complete configuration examples. Ea
 |---------|-------------|----------|
 | **basic-routing.json** | Simple routing by messageType header | Single header determines topic |
 | **routing-with-prefix.json** | Add prefix to routed topics | Want to namespace topics (e.g., `banking-PAYMENT`) |
-| **multi-dimensional-routing.json** | Route by multiple headers | Need topics like `RETAIL-PAYMENT` |
+| **multi-dimensional-routing.json** | Route by combined routing key | Need topics like `RETAIL-PAYMENT` (requires app to set routingKey property) |
 | **conditional-routing.json** | Route based on predicates | Different routing rules for different message types |
 | **routing-with-metadata.json** | Add enrichment before routing | Need to add timestamp, source info, etc. |
 
@@ -102,7 +108,7 @@ TextMessage message = session.createTextMessage("{\"transactionId\":\"TXN-12345\
 // Set MQ properties (these become Kafka headers after duplication)
 message.setStringProperty("messageType", "PAYMENT");
 message.setStringProperty("priority", "HIGH");
-message.setStringProperty("businessUnit", "RETAIL");
+message.setStringProperty("routingKey", "RETAIL-PAYMENT");  // Pre-combined for Pattern 3
 
 // Application publishes to its normal queue
 Queue appQueue = session.createQueue("PAYMENT.APP.QUEUE");
@@ -115,7 +121,7 @@ sender.send(appQueue, message);
 ```
 messageType: PAYMENT
 priority: HIGH
-businessUnit: RETAIL
+routingKey: RETAIL-PAYMENT
 ```
 
 **Message Payload:**
@@ -125,13 +131,13 @@ businessUnit: RETAIL
 
 ### How Each Pattern Routes This Message
 
-| Pattern | Configuration | Resulting Topic | Why |
-|---------|--------------|-----------------|-----|
-| **Pattern 1: Basic** | `${header:messageType}` | `PAYMENT` | Uses messageType header directly |
-| **Pattern 2: Prefix** | `banking-${header:messageType}` | `banking-PAYMENT` | Adds namespace prefix |
-| **Pattern 3: Multi-dimensional** | `${header:businessUnit}-${header:messageType}` | `RETAIL-PAYMENT` | Combines two headers |
-| **Pattern 4: Enrichment** | `${header:messageType}` (after enrichment) | `PAYMENT` | Same routing, but payload enriched first |
-| **Pattern 5: Conditional** | `${header:messageType}-priority` (has priority header) | `PAYMENT-priority` | Routes to priority topic |
+| Pattern | SMT Used | Resulting Topic | Why |
+|---------|----------|-----------------|-----|
+| **Pattern 1: Basic** | `ExtractTopic$Header(messageType)` | `PAYMENT` | Extracts messageType header value directly |
+| **Pattern 2: Prefix** | `ExtractTopic$Header` + `RegexRouter` | `banking-PAYMENT` | Extracts header, then adds prefix |
+| **Pattern 3: Multi-dimensional** | `ExtractTopic$Header(routingKey)` | `RETAIL-PAYMENT` | Uses pre-combined routing key |
+| **Pattern 4: Enrichment** | `InsertField` + `ExtractTopic$Header` | `PAYMENT` | Enriches payload, then routes by messageType |
+| **Pattern 5: Conditional** | `ExtractTopic$Header` + predicate | `PAYMENT-priority` | Routes to priority topic (has priority header) |
 
 **Pattern 4 Enriched Payload:**
 ```json
@@ -147,58 +153,71 @@ businessUnit: RETAIL
 
 ### Pattern 1: Basic Routing
 
-Route based on a single header value:
+Route based on a single header value using `ExtractTopic$Header`:
 
 ```json
 "transforms": "route",
-"transforms.route.type": "org.apache.kafka.connect.transforms.RegexRouter",
-"transforms.route.regex": ".*",
-"transforms.route.replacement": "${header:messageType}"
+"transforms.route.type": "io.confluent.connect.transforms.ExtractTopic$Header",
+"transforms.route.field": "messageType",
+"transforms.route.skip.missing.or.null": "true"
 ```
 
 **Result:**
 - Message with `messageType: PAYMENT_DOMESTIC` → Routes to `PAYMENT_DOMESTIC` topic
 - Message with `messageType: PAYMENT_INTERNATIONAL` → Routes to `PAYMENT_INTERNATIONAL` topic
 - Message with `messageType: FRAUD_ALERT` → Routes to `FRAUD_ALERT` topic
-- Message without `messageType` header → Routes to `mq-default` topic (fallback)
+- Message without `messageType` header → Routes to fallback topic (configured as `kafka.topic`)
 
 ### Pattern 2: Routing with Topic Prefix
 
-Add a namespace prefix to all routed topics:
+Add a namespace prefix to all routed topics using an SMT chain:
 
 ```json
-"transforms": "route",
-"transforms.route.type": "org.apache.kafka.connect.transforms.RegexRouter",
-"transforms.route.regex": ".*",
-"transforms.route.replacement": "banking-${header:messageType}"
+"transforms": "extractTopic,addPrefix",
+
+"transforms.extractTopic.type": "io.confluent.connect.transforms.ExtractTopic$Header",
+"transforms.extractTopic.field": "messageType",
+"transforms.extractTopic.skip.missing.or.null": "true",
+
+"transforms.addPrefix.type": "org.apache.kafka.connect.transforms.RegexRouter",
+"transforms.addPrefix.regex": ".*",
+"transforms.addPrefix.replacement": "banking-$0"
 ```
 
 **Result:**
 - Message with `messageType: PAYMENT_DOMESTIC` → Routes to `banking-PAYMENT_DOMESTIC` topic
 - Message with `messageType: FRAUD_ALERT` → Routes to `banking-FRAUD_ALERT` topic
 - Message with `messageType: ACCOUNT_TRANSACTION` → Routes to `banking-ACCOUNT_TRANSACTION` topic
-- All topics are prefixed with `banking-` to create a clear namespace for MQ-sourced messages
+- All topics are prefixed with `banking-` to create a clear namespace for JMS-sourced messages
 
 ### Pattern 3: Multi-Dimensional Routing
 
-Combine multiple headers for topic name:
+Route using a pre-combined routing key header:
 
 ```json
 "transforms": "route",
-"transforms.route.type": "org.apache.kafka.connect.transforms.RegexRouter",
-"transforms.route.regex": ".*",
-"transforms.route.replacement": "${header:businessUnit}-${header:messageType}"
+"transforms.route.type": "io.confluent.connect.transforms.ExtractTopic$Header",
+"transforms.route.field": "routingKey",
+"transforms.route.skip.missing.or.null": "true"
+```
+
+**Application Requirement:**
+The application must set a single `routingKey` JMS property with the combined value:
+```java
+message.setStringProperty("routingKey", "RETAIL-PAYMENT");
 ```
 
 **Result:**
-- Message with `businessUnit: RETAIL` + `messageType: PAYMENT` → Routes to `RETAIL-PAYMENT` topic
-- Message with `businessUnit: CORPORATE` + `messageType: PAYMENT` → Routes to `CORPORATE-PAYMENT` topic
-- Message with `businessUnit: RETAIL` + `messageType: FRAUD_ALERT` → Routes to `RETAIL-FRAUD_ALERT` topic
+- Message with `routingKey: RETAIL-PAYMENT` → Routes to `RETAIL-PAYMENT` topic
+- Message with `routingKey: CORPORATE-PAYMENT` → Routes to `CORPORATE-PAYMENT` topic
+- Message with `routingKey: RETAIL-FRAUD_ALERT` → Routes to `RETAIL-FRAUD_ALERT` topic
 - Each business unit gets separate topics for each message type, enabling independent processing and retention policies
+
+**Note:** Standard SMTs cannot combine multiple headers dynamically. Applications must pre-combine values into a single routing header.
 
 ### Pattern 4: Routing with Metadata Enrichment
 
-Add metadata before routing:
+Add metadata before routing using an SMT chain:
 
 ```json
 "transforms": "addTimestamp,addSource,route",
@@ -210,9 +229,9 @@ Add metadata before routing:
 "transforms.addSource.static.field": "sourceSystem",
 "transforms.addSource.static.value": "CORE_BANKING_MQ",
 
-"transforms.route.type": "org.apache.kafka.connect.transforms.RegexRouter",
-"transforms.route.regex": ".*",
-"transforms.route.replacement": "${header:messageType}"
+"transforms.route.type": "io.confluent.connect.transforms.ExtractTopic$Header",
+"transforms.route.field": "messageType",
+"transforms.route.skip.missing.or.null": "true"
 ```
 
 **Result:**
@@ -224,33 +243,40 @@ Add metadata before routing:
 
 ### Pattern 5: Conditional Routing with Predicates
 
-Apply different routing rules based on conditions:
+Apply different routing rules based on header presence:
 
 ```json
-"transforms": "routeHighPriority,routeNormal",
-"predicates": "isHighPriority",
+"transforms": "extractTopic,addPrioritySuffix,extractTopicNormal",
+"predicates": "hasPriorityHeader",
 
-"predicates.isHighPriority.type": "org.apache.kafka.connect.transforms.predicates.HasHeaderKey",
-"predicates.isHighPriority.name": "priority",
+"predicates.hasPriorityHeader.type": "org.apache.kafka.connect.transforms.predicates.HasHeaderKey",
+"predicates.hasPriorityHeader.name": "priority",
 
-"transforms.routeHighPriority.type": "org.apache.kafka.connect.transforms.RegexRouter",
-"transforms.routeHighPriority.regex": ".*",
-"transforms.routeHighPriority.replacement": "${header:messageType}-priority",
-"transforms.routeHighPriority.predicate": "isHighPriority",
+"transforms.extractTopic.type": "io.confluent.connect.transforms.ExtractTopic$Header",
+"transforms.extractTopic.field": "messageType",
+"transforms.extractTopic.skip.missing.or.null": "true",
+"transforms.extractTopic.predicate": "hasPriorityHeader",
 
-"transforms.routeNormal.type": "org.apache.kafka.connect.transforms.RegexRouter",
-"transforms.routeNormal.regex": ".*",
-"transforms.routeNormal.replacement": "${header:messageType}",
-"transforms.routeNormal.predicate": "isHighPriority",
-"transforms.routeNormal.negate": "true"
+"transforms.addPrioritySuffix.type": "org.apache.kafka.connect.transforms.RegexRouter",
+"transforms.addPrioritySuffix.regex": ".*",
+"transforms.addPrioritySuffix.replacement": "$0-priority",
+"transforms.addPrioritySuffix.predicate": "hasPriorityHeader",
+
+"transforms.extractTopicNormal.type": "io.confluent.connect.transforms.ExtractTopic$Header",
+"transforms.extractTopicNormal.field": "messageType",
+"transforms.extractTopicNormal.skip.missing.or.null": "true",
+"transforms.extractTopicNormal.predicate": "hasPriorityHeader",
+"transforms.extractTopicNormal.negate": "true"
 ```
 
 **Result:**
-- Message with `priority: HIGH` + `messageType: PAYMENT` → Routes to `PAYMENT-priority` topic
-- Message with `priority: CRITICAL` + `messageType: FRAUD_ALERT` → Routes to `FRAUD_ALERT-priority` topic
+- Message with `priority` header + `messageType: PAYMENT` → Routes to `PAYMENT-priority` topic
+- Message with `priority` header + `messageType: FRAUD_ALERT` → Routes to `FRAUD_ALERT-priority` topic
 - Message with `messageType: PAYMENT` (no priority header) → Routes to `PAYMENT` topic
 - Message with `messageType: ACCOUNT_TRANSACTION` (no priority header) → Routes to `ACCOUNT_TRANSACTION` topic
-- High-priority messages get dedicated topics for faster processing, separate consumer groups, and stricter SLAs
+- Messages with priority header get dedicated topics for faster processing, separate consumer groups, and stricter SLAs
+
+**Note:** `HasHeaderKey` only checks for header existence, not value. All messages with a `priority` header (regardless of value) will route to priority topics.
 
 ## IBM MQ Streaming Queue Configuration
 

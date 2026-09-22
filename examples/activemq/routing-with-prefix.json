@@ -17,13 +17,19 @@
     "value.converter": "org.apache.kafka.connect.json.JsonConverter",
     "value.converter.schemas.enable": "false",
 
-    "_comment_transforms": "===== SMT ROUTING CONFIGURATION =====",
+    "_comment_transforms": "===== SMT CHAIN: EXTRACT TOPIC + ADD PREFIX =====",
 
-    "transforms": "route",
+    "transforms": "extractTopic,addPrefix",
 
-    "transforms.route.type": "org.apache.kafka.connect.transforms.RegexRouter",
-    "transforms.route.regex": ".*",
-    "transforms.route.replacement": "banking-${header:messageType}",
+    "_comment_step1": "Step 1: Extract topic name from messageType header",
+    "transforms.extractTopic.type": "io.confluent.connect.transforms.ExtractTopic$Header",
+    "transforms.extractTopic.field": "messageType",
+    "transforms.extractTopic.skip.missing.or.null": "true",
+
+    "_comment_step2": "Step 2: Add 'banking-' prefix to the extracted topic",
+    "transforms.addPrefix.type": "org.apache.kafka.connect.transforms.RegexRouter",
+    "transforms.addPrefix.regex": ".*",
+    "transforms.addPrefix.replacement": "banking-$0",
 
     "_comment_routing": "Routes messages with 'banking-' prefix added to topic name",
     "_comment_examples": "messageType=PAYMENT_DOMESTIC -> banking-PAYMENT_DOMESTIC topic",
