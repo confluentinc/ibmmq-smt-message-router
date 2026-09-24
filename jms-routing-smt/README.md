@@ -76,16 +76,51 @@ While this custom SMT works well for self-managed Kafka Connect, **Apache Flink 
 | Feature | **Apache Flink** | **Custom SMT** |
 |---------|------------------|----------------|
 | **Processing Semantics** | Exactly-once | Depends on connector |
-| **Latency** | 1-5 seconds | 10-50ms* |
+| **Message Retention** | **Retained in input topic** | **Not retained in input topic** |
+| **Latency** | 1-5 seconds | Sub-second* |
 | **Time to Deploy** | 15-20 minutes | 30+ minutes |
 | **Deployment** | SQL (no code) | Upload JAR + config |
-| **Confluent Cloud** | Native support | Limited |
+| **Confluent Cloud** | Native support | Tested & working |
 | **Windowing/Aggregation** | Advanced | No |
 | **Stateful Processing** | Yes | No |
 | **Throughput** | 100K-1M+ msgs/sec | 10K-50K msgs/sec* |
 | **Infrastructure** | Managed Flink cluster | None (in-connector) |
 
 *SMT latency and throughput are limited by connector performance
+
+### Key Architectural Difference: Message Retention
+
+**Apache Flink Approach:**
+```
+IBM MQ → Connector → ibm.mq.input topic (messages retained)
+                          ↓
+                      Flink reads and copies
+                          ↓
+              payment-topic, transfer-topic, notification-topic
+```
+- ✅ **Original messages preserved** in ibm.mq.input
+- ✅ Can re-process from input topic if needed
+- ✅ Multiple consumers can read the same input
+- ✅ Input topic serves as audit trail
+- ❌ Higher storage costs (messages stored twice)
+
+**Custom SMT Approach:**
+```
+IBM MQ → Connector with SMT → Direct routing to target topics
+                                    ↓
+              payment-topic, transfer-topic, notification-topic
+              (ibm.mq.input bypassed - no messages stored there)
+```
+- ✅ **Lower storage costs** (messages stored once)
+- ✅ Simpler data flow (no intermediate topic)
+- ✅ Sub-second latency (routing at connector level)
+- ❌ No audit trail in input topic
+- ❌ Cannot re-process from original input
+- ❌ Cannot have multiple routing strategies on same input
+
+**Choose based on your requirements:**
+- Need audit trail or re-processing? → **Apache Flink**
+- Want minimal storage and direct routing? → **Custom SMT**
 
 ## When to Use This SMT
 
@@ -283,23 +318,26 @@ plugin.path=/usr/local/share/kafka/plugins
 
 ### Apache Flink Routing (Recommended)
 ```
-IBM MQ → MQ Source Connector → ibm.mq.input topic
+IBM MQ → MQ Source Connector → ibm.mq.input topic (messages retained here)
                                       ↓
                                   Flink Job
                           (exactly-once semantics,
                            event-time processing,
                            1-5 second latency)
+                           reads and copies
                                   /  |  \
                                  /   |   \
                     payment-topic  transfer-topic  notification-topic
 
 Separate stream processor - production-grade, fully managed in Confluent Cloud
+Messages available in BOTH input and output topics
 ```
 
 **Benefits:**
 - Exactly-once processing guarantees
 - Event-time processing with watermarks  
 - Low latency (1-5 seconds end-to-end)
+- **Messages retained in ibm.mq.input** for re-processing or audit
 - Stateful operations (aggregations, windowing, joins)
 - Native Confluent Cloud support
 
@@ -313,16 +351,18 @@ IBM MQ → IBM MQ Source Connector
            ↓ (adds Kafka header: messageType=PAYMENT)
          ExtractTopic$Header (standard Kafka Connect SMT)
            ↓
-         Routes to: payment-topic, transfer-topic, notification-topic
+         Routes DIRECTLY to: payment-topic, transfer-topic, notification-topic
 
 All processing happens within Kafka Connect - no external stream processors needed
+Messages NOT written to ibm.mq.input (routing happens at connector level)
 ```
 
 **Benefits:**
 - Minimal infrastructure (no separate stream processor)
+- **Lower storage costs** (messages stored once, not in input topic)
+- **Sub-second latency** (routing at connector level)
 - Routing logic in connector layer
 - Good for simple routing without aggregations
-- Self-managed Kafka Connect deployments
 
 ## Repository Structure
 

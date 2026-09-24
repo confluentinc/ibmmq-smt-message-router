@@ -14,6 +14,7 @@ This solution uses Apache Flink SQL to consume messages from `ibm.mq.input` topi
 - ✅ **Native Confluent Cloud** - Fully managed, no infrastructure
 - ✅ **Stateful operations** - Aggregations, windowing, joins
 - ✅ **Schema Registry integration** - JSON Schema support
+- ✅ **Messages retained in input topic** - Audit trail and re-processing capability
 
 **Tested Performance:**
 - Latency: 1-5 seconds (IBM MQ → Kafka → Flink → output topics)
@@ -22,15 +23,28 @@ This solution uses Apache Flink SQL to consume messages from `ibm.mq.input` topi
 
 **Message Flow:**
 ```
-IBM MQ → MQ Connector → ibm.mq.input topic
+IBM MQ → MQ Connector → ibm.mq.input topic (messages retained here)
                              ↓
                          Flink Job
                     (exactly-once, event-time)
+                    reads and copies messages
                          /   |   \
                         /    |    \
                payment-topic | notification-topic
                        transfer-topic
+
+Messages available in BOTH ibm.mq.input AND routed topics
 ```
+
+**Key Architectural Benefit:**
+
+With Flink, messages are **retained in the `ibm.mq.input` topic** and then copied to output topics. This means:
+- ✅ Complete audit trail of all incoming messages
+- ✅ Can re-process messages by resetting Flink job
+- ✅ Multiple Flink jobs can read from the same input topic
+- ✅ Original message structure preserved for debugging
+
+**Alternative: Custom SMT routing** (in parent directory) routes at the connector level, so messages never appear in `ibm.mq.input`. This saves storage but loses the audit trail. See `../README.md` for comparison.
 
 ## Quick Start (Confluent Cloud)
 
