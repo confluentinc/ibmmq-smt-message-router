@@ -289,7 +289,7 @@ zip -r ../jms-property-to-header-smt-plugin.zip .
 
 ## Usage: Custom SMT
 
-This section covers using the custom SMT from this repository. **Consider using [Flink](#-best-for-production-apache-flink-15-minutes) or [ksqlDB](#-fastest-ksqldb-5-minutes---recommended-for-quick-start) instead for easier deployment.**
+This section covers using the custom SMT from this repository. **Consider using [Apache Flink](#recommended-apache-flink-15-20-minutes) instead for production deployments with exactly-once semantics and audit trail.**
 
 ## Building
 
@@ -502,7 +502,7 @@ producer.send(msg);
 **Check:**
 1. Verify JMS property is set: Look for `properties.messageType.string` in Kafka message
 2. Check property value matches exactly (case-sensitive): `PAYMENT` ≠ `payment`
-3. Verify routing queries are running (ksqlDB/Flink) or SMT is configured
+3. Verify routing is configured: Flink jobs running or SMT transforms active
 
 ### All messages going to unknown topic
 
@@ -511,9 +511,8 @@ producer.send(msg);
 
 ### High latency
 
-**ksqlDB:** Check query backlog in UI  
-**Flink:** Check backpressure in Flink Web UI  
-**SMT:** Check connector task lag
+**Flink:** Check backpressure in Flink Web UI and verify jobs are running  
+**SMT:** Check connector task lag and verify transforms are active
 
 ## Contributing
 
