@@ -1,0 +1,5 @@
+# Maven build artifacts
+target/
+
+# Temporary build directory
+kafka-connect-jms-smt/

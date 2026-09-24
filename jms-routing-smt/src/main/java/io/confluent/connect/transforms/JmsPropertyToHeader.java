@@ -10,6 +10,7 @@ import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Extracts nested JMS properties from IBM MQ connector messages and copies them to Kafka headers.
@@ -80,8 +81,11 @@ public abstract class JmsPropertyToHeader<R extends ConnectRecord<R>> implements
             if (skipMissing) {
                 return record;
             } else {
+                // Build detailed error message
+                String errorDetails = buildErrorDetails(value);
                 throw new IllegalArgumentException(
-                    "Property '" + propertyName + "' not found in message and skip.missing=false");
+                    "Property '" + propertyName + "' not found in message and skip.missing=false. " +
+                    "Message structure: " + errorDetails);
             }
         }
 
@@ -98,17 +102,75 @@ public abstract class JmsPropertyToHeader<R extends ConnectRecord<R>> implements
      */
     private String extractFromStruct(Struct struct) {
         try {
-            Struct properties = struct.getStruct("properties");
-            if (properties == null) {
+            // Try to get properties as Struct first
+            Object propertiesObj = null;
+            try {
+                propertiesObj = struct.get("properties");
+            } catch (Exception e) {
+                // Field might not exist
                 return null;
             }
 
-            Struct property = properties.getStruct(propertyName);
-            if (property == null) {
+            if (propertiesObj == null) {
                 return null;
             }
 
-            return property.getString("string");
+            // Handle if properties is a Struct
+            if (propertiesObj instanceof Struct) {
+                Struct properties = (Struct) propertiesObj;
+                Object propertyObj = null;
+                try {
+                    propertyObj = properties.get(propertyName);
+                } catch (Exception e) {
+                    return null;
+                }
+
+                if (propertyObj == null) {
+                    return null;
+                }
+
+                // Handle if property is a Struct
+                if (propertyObj instanceof Struct) {
+                    Struct property = (Struct) propertyObj;
+                    try {
+                        Object stringValue = property.get("string");
+                        return stringValue != null ? stringValue.toString() : null;
+                    } catch (Exception e) {
+                        return null;
+                    }
+                }
+                // Handle if property is a Map (mixed schema/schemaless)
+                else if (propertyObj instanceof Map) {
+                    Map<String, Object> property = (Map<String, Object>) propertyObj;
+                    Object stringValue = property.get("string");
+                    return stringValue != null ? stringValue.toString() : null;
+                }
+            }
+            // Handle if properties is a Map (mixed schema/schemaless)
+            else if (propertiesObj instanceof Map) {
+                Map<String, Object> properties = (Map<String, Object>) propertiesObj;
+                Object propertyObj = properties.get(propertyName);
+                if (propertyObj == null) {
+                    return null;
+                }
+
+                if (propertyObj instanceof Map) {
+                    Map<String, Object> property = (Map<String, Object>) propertyObj;
+                    Object stringValue = property.get("string");
+                    return stringValue != null ? stringValue.toString() : null;
+                }
+                else if (propertyObj instanceof Struct) {
+                    Struct property = (Struct) propertyObj;
+                    try {
+                        Object stringValue = property.get("string");
+                        return stringValue != null ? stringValue.toString() : null;
+                    } catch (Exception e) {
+                        return null;
+                    }
+                }
+            }
+
+            return null;
         } catch (Exception e) {
             return null;
         }
@@ -138,6 +200,31 @@ public abstract class JmsPropertyToHeader<R extends ConnectRecord<R>> implements
         } catch (Exception e) {
             return null;
         }
+    }
+
+    /**
+     * Build detailed error message showing available fields
+     */
+    private String buildErrorDetails(Object value) {
+        StringBuilder details = new StringBuilder();
+
+        if (value instanceof Struct) {
+            Struct struct = (Struct) value;
+            details.append("Struct with schema fields: ");
+            details.append(struct.schema().fields().stream()
+                .map(field -> field.name())
+                .collect(Collectors.joining(", ")));
+        } else if (value instanceof Map) {
+            Map<?, ?> map = (Map<?, ?>) value;
+            details.append("Map with keys: ");
+            details.append(String.join(", ", map.keySet().stream()
+                .map(Object::toString)
+                .collect(Collectors.toList())));
+        } else {
+            details.append("Unknown type: ").append(value.getClass().getName());
+        }
+
+        return details.toString();
     }
 
     @Override
