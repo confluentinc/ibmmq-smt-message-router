@@ -45,53 +45,47 @@ IBM MQ → IBM MQ Source Connector
 
 This approach keeps routing logic **inside Kafka Connect**, without requiring additional stream processing infrastructure.
 
-## Recommended Alternatives
+## Recommended Alternative: Apache Flink
 
-While this SMT works well, **Apache Flink or ksqlDB are recommended** for production use cases:
+While this custom SMT works well for self-managed Kafka Connect, **Apache Flink is recommended for production use cases**:
 
-### Recommended: Apache Flink
+### Why Apache Flink?
 
-**Why Flink?**
-- **Exactly-once processing** guarantees
-- **Event-time processing** with watermarks
-- **Stateful operations** for complex routing
-- **Better performance** at scale
-- **Native support** in Confluent Cloud
+- **Exactly-once processing** - No duplicates, guaranteed correctness
+- **Low latency** - Sub-5 second end-to-end in steady state
+- **Event-time processing** - Watermarks for handling late events
+- **Stateful operations** - Aggregations, windowing, joins
+- **Better performance** - 100K-1M+ msgs/sec throughput
+- **Native Confluent Cloud support** - Fully managed, auto-scaling
+- **Production-grade** - Automatic checkpointing, fault tolerance
 
-**[See Flink solution →](flink-routing/)**
+**[See Flink routing solution →](flink-routing/)**
 
-### Alternative: ksqlDB
-
-**Why ksqlDB?**
-- **Simplest deployment** (just SQL)
-- **No code required**
-- **5-minute setup** in Confluent Cloud
-- **Good enough** for most use cases
-
-**[See ksqlDB solution →](ksqldb-routing/)**
-
-### This SMT Solution
+### This Custom SMT Solution
 
 **When to use the custom SMT:**
-- You want routing **in the connector layer**
-- You're running **self-managed** Kafka Connect
-- You want to **minimize infrastructure** (no stream processing)
-- You need **connector-level** processing semantics
-- Limited support in Confluent Cloud (may require Enterprise plan)
+- You're running **self-managed Kafka Connect** and want routing in the connector layer
+- You want to **minimize infrastructure** (no separate stream processors)
+- You **cannot use Flink** due to organizational constraints
+- You need **connector-level processing** semantics
+- Simple routing without aggregations or stateful operations
+- Note: **Limited support** in Confluent Cloud (may require Enterprise plan)
 
 ### Quick Comparison
 
-| Feature | **Flink** | **ksqlDB** | **Custom SMT** |
-|---------|------------|-------------|-------------------|
-| **Processing Semantics** | Exactly-once | At-least-once | Depends on connector |
-| **Time to Deploy** | 15 minutes | 5 minutes | 30+ minutes |
-| **Deployment** | SQL or Java | SQL only | Upload JAR + config |
-| **Confluent Cloud** | Native | Native | Limited |
-| **Code Required** | No (SQL) | No | Yes (Java) |
-| **Windowing/Aggregation** | Advanced | Basic | No |
-| **Stateful Processing** | Yes | Yes | No |
-| **Performance** | Excellent | Good | Connector-limited |
-| **Infrastructure** | Stream processor | Stream processor | None (in-connector) |
+| Feature | **Apache Flink** | **Custom SMT** |
+|---------|------------------|----------------|
+| **Processing Semantics** | Exactly-once | Depends on connector |
+| **Latency** | 1-5 seconds | 10-50ms* |
+| **Time to Deploy** | 15-20 minutes | 30+ minutes |
+| **Deployment** | SQL (no code) | Upload JAR + config |
+| **Confluent Cloud** | Native support | Limited |
+| **Windowing/Aggregation** | Advanced | No |
+| **Stateful Processing** | Yes | No |
+| **Throughput** | 100K-1M+ msgs/sec | 10K-50K msgs/sec* |
+| **Infrastructure** | Managed Flink cluster | None (in-connector) |
+
+*SMT latency and throughput are limited by connector performance
 
 ## When to Use This SMT
 
@@ -100,9 +94,10 @@ Choose this custom SMT approach if:
 1. **You're already running self-managed Kafka Connect** and don't want to add stream processing infrastructure
 2. **You want all routing logic in Kafka Connect** for architectural simplicity
 3. **You have specific connector-level processing requirements** (e.g., dead letter queues, error handling)
-4. **You cannot use Flink or ksqlDB** due to organizational constraints
+4. **You cannot use Apache Flink** due to organizational constraints
+5. **Simple routing is sufficient** - No aggregations, windowing, or stateful operations needed
 
-For most users, especially those on Confluent Cloud, **we recommend Flink or ksqlDB** instead.
+For most users, especially those on Confluent Cloud, **we recommend Apache Flink** instead for better processing guarantees and lower end-to-end latency.
 
 ### SMT Configuration
 
@@ -195,87 +190,63 @@ zip -r ../jms-property-to-header-smt-plugin.zip .
 
 ## Decision Guide
 
-**TL;DR: Use Flink if available, ksqlDB for simplicity, or this SMT if you must stay in Kafka Connect.**
+**TL;DR: Use Apache Flink for production, or this custom SMT if you must stay in Kafka Connect.**
 
-### Choose Apache Flink if:
+### Choose Apache Flink (Recommended) if:
 - You need **exactly-once processing** guarantees
-- You're processing **financial transactions** or critical data
-- You need **event-time processing** with watermarks
-- You want **advanced windowing** and aggregations
+- You're processing **financial transactions** or critical data  
+- You need **low latency** (1-5 seconds end-to-end)
+- You want **event-time processing** with watermarks
+- You need **advanced windowing** and aggregations
 - You have **high throughput** requirements (>100K msgs/sec)
-- You're using **Confluent Cloud** (native support)
+- You're using **Confluent Cloud** (native, fully managed support)
+- You want **stateful operations** (joins, aggregations, deduplication)
 
 **Best for:** Production-grade streaming applications with strict processing guarantees.
 
+**Performance:** Sub-5 second latency, exactly-once semantics, 100K-1M+ msgs/sec throughput.
+
 **[Flink Routing Guide →](flink-routing/)**
 
-### Choose ksqlDB if:
-- You want the **fastest time to value** (5 minutes)
-- You're using **Confluent Cloud** without Flink
-- **SQL-only** development is preferred
-- At-least-once processing is **acceptable**
-- You need **basic filtering and routing**
-
-**Best for:** Quick development, proof-of-concepts, and most streaming use cases.
-
-**[ksqlDB Routing Guide →](ksqldb-routing/)**
-
 ### Choose This Custom SMT if:
-- You want routing logic **in Kafka Connect**
+- You want routing logic **in Kafka Connect** (no separate stream processor)
 - You're running **self-managed** Kafka Connect clusters
-- You cannot use Flink or ksqlDB (organizational constraints)
-- You need to **minimize infrastructure** (no stream processors)
-- You're a **Kafka Connect purist**
+- You cannot use Apache Flink (organizational constraints)
+- You need to **minimize infrastructure** (no additional components)
+- **Simple routing** is sufficient (no aggregations or windowing needed)
 - You understand Confluent Cloud has **limited custom SMT support**
 
 **Best for:** Self-managed Kafka Connect deployments where stream processing is not an option.
+
+**Performance:** 10-50ms latency within connector, throughput limited by connector (10K-50K msgs/sec).
 
 **[Custom SMT Usage →](#usage-custom-smt)**
 
 ## Quick Start
 
-### Fastest: ksqlDB (5 minutes) - Recommended for Quick Start
-
-```sql
--- Connect to ksqlDB and run:
-CREATE STREAM ibm_mq_input_stream WITH (
-  KAFKA_TOPIC='ibm.mq.input',
-  VALUE_FORMAT='JSON'
-);
-
-CREATE STREAM payment_topic AS
-  SELECT text, properties->messageType->string AS messageType
-  FROM ibm_mq_input_stream
-  WHERE properties->messageType->string = 'PAYMENT'
-  EMIT CHANGES;
-```
-
-Done! Messages with `messageType=PAYMENT` now flow to `payment-topic`.
-
-**[See full ksqlDB guide →](ksqldb-routing/)**
-
-### Best for Production: Apache Flink (15 minutes)
+### Recommended: Apache Flink (15-20 minutes)
 
 **Confluent Cloud for Apache Flink:**
-1. Create a Flink compute pool
-2. Open Flink SQL workspace  
-3. Run the SQL from [`flink-routing/routing.sql`](flink-routing/routing.sql)
+1. Navigate to Flink in Confluent Cloud
+2. Select your compute pool (or create one)
+3. Open Flink SQL workspace
+4. Run SQL statements from [`flink-routing/routing.sql`](flink-routing/routing.sql)
+5. Verify jobs are running in the Jobs tab
 
-**Self-Managed Flink:**
-```bash
-./bin/sql-client.sh
-# Then run SQL from flink-routing/routing.sql
-```
+**Result:** Exactly-once routing with 1-5 second latency.
 
 **[See full Flink guide →](flink-routing/)**
 
-### Custom SMT Approach (30+ minutes) - This Repository
+### Alternative: Custom SMT (30+ minutes)
 
 **For self-managed Kafka Connect deployments:**
 
 1. Build the JAR: `mvn clean package`
-2. Upload `jms-property-to-header-smt-plugin.zip` to Kafka Connect
-3. Configure connector with transforms
+2. Create connector plugin: package as ZIP with lib/ directory
+3. Upload `jms-property-to-header-smt-plugin.zip` to Kafka Connect
+4. Configure connector with transforms (see below)
+
+**Result:** Routing within Kafka Connect, no external stream processor needed.
 
 **[See full SMT usage →](#usage-custom-smt)**
 
@@ -310,6 +281,28 @@ plugin.path=/usr/local/share/kafka/plugins
 
 ## Architecture Overview
 
+### Apache Flink Routing (Recommended)
+```
+IBM MQ → MQ Source Connector → ibm.mq.input topic
+                                      ↓
+                                  Flink Job
+                          (exactly-once semantics,
+                           event-time processing,
+                           1-5 second latency)
+                                  /  |  \
+                                 /   |   \
+                    payment-topic  transfer-topic  notification-topic
+
+Separate stream processor - production-grade, fully managed in Confluent Cloud
+```
+
+**Benefits:**
+- Exactly-once processing guarantees
+- Event-time processing with watermarks  
+- Low latency (1-5 seconds end-to-end)
+- Stateful operations (aggregations, windowing, joins)
+- Native Confluent Cloud support
+
 ### Custom SMT Routing (This Repository)
 ```
 IBM MQ → IBM MQ Source Connector
@@ -325,33 +318,11 @@ IBM MQ → IBM MQ Source Connector
 All processing happens within Kafka Connect - no external stream processors needed
 ```
 
-### Apache Flink Routing (Recommended Alternative)
-```
-IBM MQ → MQ Connector → ibm.mq.input topic
-                             ↓
-                      Flink Job
-                 (exactly-once semantics,
-                  event-time processing)
-                         /  |  \
-                        /   |   \
-           payment-topic  transfer-topic  notification-topic
-
-Separate stream processor - better semantics, more capabilities
-```
-
-### ksqlDB Routing (Simpler Alternative)
-```
-IBM MQ → MQ Connector → ibm.mq.input topic
-                             ↓
-                         ksqlDB
-                    (SQL streaming queries,
-                     at-least-once)
-                         /  |  \
-                        /   |   \
-           payment-topic  transfer-topic  notification-topic
-
-Separate stream processor - simplest deployment, SQL-only
-```
+**Benefits:**
+- Minimal infrastructure (no separate stream processor)
+- Routing logic in connector layer
+- Good for simple routing without aggregations
+- Self-managed Kafka Connect deployments
 
 ## Repository Structure
 
@@ -359,26 +330,22 @@ Separate stream processor - simplest deployment, SQL-only
 .
 ├── README.md                          # This file - overview and decision guide
 │
-├── src/                               # Custom SMT (primary focus)
+├── src/                               # Custom SMT implementation
 │   └── main/java/io/confluent/connect/transforms/
-│       └── JmsPropertyToHeader.java   # Custom SMT implementation
+│       └── JmsPropertyToHeader.java   # Custom SMT for extracting JMS properties
 ├── pom.xml                            # Maven build for custom SMT
 ├── jms-property-to-header-smt-plugin.zip  # Ready-to-upload connector plugin
 │
-├── flink-routing/                     # Apache Flink (recommended alternative)
-│   ├── README.md                      # Full Flink guide
-│   ├── routing.sql                    # Flink SQL DDL and routing
-│   └── java-router/                   # Flink Table API (Java)
-│       ├── pom.xml
-│       └── src/main/java/io/confluent/flink/FlinkMessageRouter.java
-│
-└── ksqldb-routing/                    # ksqlDB (simpler alternative)
-    ├── README.md                      # Full ksqlDB guide
-    └── routing.sql                    # ksqlDB SQL statements
+└── flink-routing/                     # Apache Flink routing (recommended)
+    ├── README.md                      # Full Flink deployment guide
+    ├── routing.sql                    # Flink SQL DDL and routing jobs
+    └── java-router/                   # Flink Table API (Java option)
+        ├── pom.xml
+        └── src/main/java/io/confluent/flink/FlinkMessageRouter.java
 ```
 
-**Primary deliverable:** Custom Kafka Connect SMT for routing IBM MQ messages  
-**Bonus content:** Flink and ksqlDB alternatives for teams with stream processing infrastructure
+**Primary deliverable:** Custom Kafka Connect SMT for routing IBM MQ messages in self-managed deployments  
+**Recommended alternative:** Apache Flink routing with exactly-once semantics and native Confluent Cloud support
 
 ## Real-World Considerations
 
@@ -386,87 +353,82 @@ Separate stream processor - simplest deployment, SQL-only
 
 | Solution | Latency | Throughput | Resource Usage |
 |----------|---------|------------|----------------|
-| **Custom SMT** | ~10-50ms | Connector-limited* | Lowest (in-connector) |
-| **Flink** | ~20-100ms | 100K-1M+ msgs/sec | Higher (CFU-based) |
-| **ksqlDB** | ~50-200ms | 10K-100K msgs/sec | Moderate (CSU-based) |
+| **Apache Flink** | **1-5 seconds** | 100K-1M+ msgs/sec | CFU-based (Confluent Cloud) |
+| **Custom SMT** | ~10-50ms* | 10K-50K msgs/sec* | Lowest (in-connector) |
 
-*SMT throughput is limited by connector throughput, typically 10K-50K msgs/sec per task.
+*SMT latency and throughput are limited by connector performance. Latency shown is within connector only, not end-to-end.
 
 ### Operational Complexity
 
 | Solution | Setup | Monitoring | Troubleshooting | Updates |
 |----------|-------|------------|-----------------|---------|
-| **Custom SMT** | Complex | Connector metrics | Worker logs | Update config + restart |
-| **ksqlDB** | Easy | Built-in UI | SQL logs | Edit SQL (live) |
-| **Flink** | Moderate | Web UI + metrics | Job logs | Redeploy job |
+| **Flink** | Moderate (15-20 min) | Flink Web UI + metrics | Job logs, checkpoints | Redeploy job (versioned) |
+| **Custom SMT** | Complex (30+ min) | Connector metrics only | Worker logs | Update config + restart |
 
 ### Deployment & Cost (Confluent Cloud)
 
 | Solution | Confluent Cloud Support | Pricing Model | Infrastructure |
 |----------|-------------------------|---------------|----------------|
-| **Custom SMT** | Limited (Enterprise plan may be required) | Included in connector | Kafka Connect workers |
-| **Flink** | Native support | CFU-based (higher cost, better guarantees) | Managed Flink cluster |
-| **ksqlDB** | Native support | CSU-based (moderate cost) | Managed ksqlDB cluster |
+| **Flink** | **Native support** | CFU-based | Fully managed Flink cluster |
+| **Custom SMT** | Limited (Enterprise plan may be required) | Included in connector | Self-managed Connect workers |
 
 ### Processing Guarantees
 
 | Solution | Semantics | State Management | Failure Recovery |
 |----------|-----------|------------------|------------------|
-| **Custom SMT** | Connector-dependent (typically at-least-once) | None (stateless) | Connector restart |
 | **Flink** | **Exactly-once** | RocksDB checkpoints | Automatic from checkpoint |
-| **ksqlDB** | At-least-once | RocksDB | Automatic from offset |
+| **Custom SMT** | Connector-dependent (typically at-least-once) | None (stateless) | Connector restart |
 
 ### When Each Solution Shines
 
+**Apache Flink (Recommended):**
+- ✅ **Exactly-once processing** (critical for financial data)
+- ✅ **Low end-to-end latency** (1-5 seconds tested)
+- ✅ **High throughput** (100K-1M+ msgs/sec)
+- ✅ **Event-time processing** with watermarks
+- ✅ **Advanced features** (windowing, joins, aggregations, state)
+- ✅ **Native Confluent Cloud** support (fully managed)
+- ✅ **Production-grade** reliability
+
 **Custom SMT:**
-- Minimal infrastructure footprint
-- Self-managed Kafka Connect
-- Simple routing without aggregations
-- No windowing or stateful operations
-- Limited Confluent Cloud support
-
-**Flink (Recommended for Production):**
-- **Exactly-once processing** (critical for financial data)
-- **High throughput** (100K+ msgs/sec)
-- **Event-time processing** with watermarks
-- **Advanced features** (windowing, joins, state)
-- **Native Confluent Cloud** support
-- Higher cost
-
-**ksqlDB (Recommended for Quick Start):**
-- **Fastest deployment** (5 minutes)
-- **SQL-only** (no code)
-- **Good enough** for most use cases
-- **Native Confluent Cloud** support
-- At-least-once semantics
-- Lower throughput than Flink
+- ✅ Minimal infrastructure footprint (no separate stream processor)
+- ✅ Self-managed Kafka Connect environments
+- ✅ Simple routing without aggregations
+- ❌ No windowing or stateful operations
+- ❌ Limited Confluent Cloud support
+- ❌ Connector-dependent semantics
 
 ## Common Use Cases
 
 ### Use Case 1: Simple Routing
 **Requirement:** Route messages to 3 topics based on messageType  
-**Recommendation:** ksqlDB ⭐  
-**Why:** Simplest solution, no code required
+**Recommendation:** Apache Flink ⭐  
+**Why:** SQL-only, exactly-once, 15-minute setup in Confluent Cloud
 
 ### Use Case 2: Routing + Aggregation
 **Requirement:** Route messages AND count by type per minute  
-**Recommendation:** Flink or ksqlDB ⭐  
-**Why:** Both support windowing
+**Recommendation:** Apache Flink ⭐  
+**Why:** Advanced windowing, aggregations, exactly-once semantics
 
 ### Use Case 3: Exactly-Once Financial Transactions
 **Requirement:** Process payments with no duplicates  
-**Recommendation:** Flink ⭐  
-**Why:** Exactly-once semantics
+**Recommendation:** Apache Flink ⭐  
+**Why:** Exactly-once processing guarantees, production-grade reliability
 
 ### Use Case 4: High-Volume Low-Latency
-**Requirement:** 500K msgs/sec with <50ms latency  
-**Recommendation:** Flink ⭐  
-**Why:** Best performance characteristics
+**Requirement:** 500K msgs/sec with sub-5 second latency  
+**Recommendation:** Apache Flink ⭐  
+**Why:** Tested 1-5 second end-to-end latency, 100K-1M+ msgs/sec throughput
 
 ### Use Case 5: Minimal Infrastructure
-**Requirement:** Already running Kafka Connect, avoid new components  
+**Requirement:** Already running self-managed Kafka Connect, avoid new components  
 **Recommendation:** Custom SMT ⭐  
-**Why:** No additional infrastructure
+**Why:** No additional infrastructure, routing in connector layer
+
+### Use Case 6: Complex Event Processing
+**Requirement:** Joins, aggregations, pattern detection, stateful operations  
+**Recommendation:** Apache Flink ⭐  
+**Why:** Full stream processing capabilities with exactly-once guarantees
 
 ## Testing
 

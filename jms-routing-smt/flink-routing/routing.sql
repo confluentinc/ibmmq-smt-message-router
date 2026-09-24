@@ -1,239 +1,176 @@
 -- Apache Flink SQL Message Routing for IBM MQ Messages
 --
--- This approach uses Flink SQL to route messages from ibm.mq.input topic
+-- This approach uses Flink SQL to route messages from the ibm.mq.input topic
 -- to separate topics based on the nested JMS property: properties.messageType.string
---
--- Can be executed in:
--- - Confluent Cloud for Apache Flink
--- - Self-managed Flink cluster with Kafka connector
--- - Flink SQL Client
 --
 -- Prerequisites:
 -- 1. IBM MQ Source Connector writing to 'ibm.mq.input' topic
--- 2. Flink cluster with Kafka connector (flink-connector-kafka)
--- 3. Kafka cluster accessible from Flink
-
--- ============================================================================
--- Configuration (Confluent Cloud for Apache Flink)
--- ============================================================================
-
--- Set these in Confluent Cloud UI or via properties:
--- kafka.bootstrap.servers = <your-kafka-cluster>
--- security.protocol = SASL_SSL
--- sasl.mechanism = PLAIN
--- sasl.jaas.config = org.apache.kafka.common.security.plain.PlainLoginModule required username="<api-key>" password="<api-secret>";
+-- 2. Flink compute pool in Confluent Cloud
+-- 3. JSON schema registered in Schema Registry for ibm.mq.input topic
+--
+-- Usage in Confluent Cloud for Apache Flink:
+-- 1. Navigate to Flink in Confluent Cloud
+-- 2. Select your compute pool
+-- 3. Open SQL workspace
+-- 4. Run these statements in order (each one separately)
+--
+-- IMPORTANT: Schema Registry Setup Required
+-- Before running these statements, ensure a JSON schema is registered for the
+-- ibm.mq.input topic in Schema Registry. The schema must NOT contain null types
+-- (Flink doesn't support org.everit.json.schema.NullSchema).
+--
+-- If you get schema errors:
+-- 1. Delete the existing schema from Schema Registry
+-- 2. Let Flink create the schema when you create the source table
+-- 3. Or register a cleaned schema without null types
 
 -- ============================================================================
 -- STEP 1: Create source table for IBM MQ input
 -- ============================================================================
+-- Maps to existing 'ibm.mq.input' Kafka topic
+-- Uses JSON Schema Registry for serialization
 
-CREATE TABLE ibm_mq_input (
-  `messageID` STRING,
-  `messageType` STRING,
-  `timestamp` BIGINT,
-  `deliveryMode` INT,
-  `correlationID` STRING,
-  `replyTo` STRING,
-  `destination` ROW<
-    `destinationType` STRING,
-    `name` STRING
-  >,
-  `redelivered` BOOLEAN,
-  `type` STRING,
-  `expiration` BIGINT,
-  `priority` INT,
-  `properties` ROW<
-    `JMS_IBM_Format` ROW<
-      `propertyType` STRING,
+CREATE TABLE `ibm.mq.input` (
+  messageID STRING,
+  `timestamp` DOUBLE,
+  properties ROW<
+    messageType ROW<
+      propertyType STRING,
       `string` STRING
-    >,
-    `JMS_IBM_PutDate` ROW<
-      `propertyType` STRING,
-      `string` STRING
-    >,
-    `JMS_IBM_Character_Set` ROW<
-      `propertyType` STRING,
-      `string` STRING
-    >,
-    `JMSXDeliveryCount` ROW<
-      `propertyType` STRING,
-      `integer` INT
-    >,
-    `messageType` ROW<
-      `propertyType` STRING,
-      `string` STRING
-    >,
-    `JMS_IBM_MsgType` ROW<
-      `propertyType` STRING,
-      `integer` INT
-    >,
-    `JMSXUserID` ROW<
-      `propertyType` STRING,
-      `string` STRING
-    >,
-    `JMS_IBM_Encoding` ROW<
-      `propertyType` STRING,
-      `integer` INT
-    >,
-    `JMS_IBM_PutTime` ROW<
-      `propertyType` STRING,
-      `string` STRING
-    >,
-    `JMSXAppID` ROW<
-      `propertyType` STRING,
-      `string` STRING
-    >,
-    `JMS_IBM_PutApplType` ROW<
-      `propertyType` STRING,
-      `integer` INT
     >
   >,
-  `bytes` STRING,
-  `map` STRING,
-  `text` STRING,
-  `proc_time` AS PROCTIME()  -- Processing time for windowing
+  text STRING
 ) WITH (
-  'connector' = 'kafka',
-  'topic' = 'ibm.mq.input',
-  'properties.bootstrap.servers' = '${kafka.bootstrap.servers}',
-  'properties.group.id' = 'flink-mq-router',
-  'scan.startup.mode' = 'latest-offset',
-  'format' = 'json',
-  'json.fail-on-missing-field' = 'false',
-  'json.ignore-parse-errors' = 'true'
+  'connector' = 'confluent',
+  'value.format' = 'json-registry'
 );
 
 -- ============================================================================
 -- STEP 2: Create sink tables for each message type
 -- ============================================================================
+-- These will write to payment-topic, transfer-topic, notification-topic
+-- Schemas will be auto-created in Schema Registry
 
 -- Payment messages sink
-CREATE TABLE payment_topic (
-  `messageID` STRING,
-  `timestamp` BIGINT,
-  `text` STRING,
-  `messageType` STRING,
-  PRIMARY KEY (`messageID`) NOT ENFORCED
+CREATE TABLE `payment-topic` (
+  messageID STRING,
+  `timestamp` DOUBLE,
+  text STRING,
+  messageType STRING,
+  PRIMARY KEY (messageID) NOT ENFORCED
 ) WITH (
-  'connector' = 'kafka',
-  'topic' = 'payment-topic',
-  'properties.bootstrap.servers' = '${kafka.bootstrap.servers}',
-  'format' = 'json',
-  'sink.partitioner' = 'default'
+  'connector' = 'confluent',
+  'value.format' = 'json-registry'
 );
 
 -- Transfer messages sink
-CREATE TABLE transfer_topic (
-  `messageID` STRING,
-  `timestamp` BIGINT,
-  `text` STRING,
-  `messageType` STRING,
-  PRIMARY KEY (`messageID`) NOT ENFORCED
+CREATE TABLE `transfer-topic` (
+  messageID STRING,
+  `timestamp` DOUBLE,
+  text STRING,
+  messageType STRING,
+  PRIMARY KEY (messageID) NOT ENFORCED
 ) WITH (
-  'connector' = 'kafka',
-  'topic' = 'transfer-topic',
-  'properties.bootstrap.servers' = '${kafka.bootstrap.servers}',
-  'format' = 'json',
-  'sink.partitioner' = 'default'
+  'connector' = 'confluent',
+  'value.format' = 'json-registry'
 );
 
 -- Notification messages sink
-CREATE TABLE notification_topic (
-  `messageID` STRING,
-  `timestamp` BIGINT,
-  `text` STRING,
-  `messageType` STRING,
-  PRIMARY KEY (`messageID`) NOT ENFORCED
+CREATE TABLE `notification-topic` (
+  messageID STRING,
+  `timestamp` DOUBLE,
+  text STRING,
+  messageType STRING,
+  PRIMARY KEY (messageID) NOT ENFORCED
 ) WITH (
-  'connector' = 'kafka',
-  'topic' = 'notification-topic',
-  'properties.bootstrap.servers' = '${kafka.bootstrap.servers}',
-  'format' = 'json',
-  'sink.partitioner' = 'default'
-);
-
--- Unknown message type sink
-CREATE TABLE unknown_message_type_topic (
-  `messageID` STRING,
-  `timestamp` BIGINT,
-  `text` STRING,
-  `messageType` STRING,
-  PRIMARY KEY (`messageID`) NOT ENFORCED
-) WITH (
-  'connector' = 'kafka',
-  'topic' = 'unknown-message-type-topic',
-  'properties.bootstrap.servers' = '${kafka.bootstrap.servers}',
-  'format' = 'json',
-  'sink.partitioner' = 'default'
+  'connector' = 'confluent',
+  'value.format' = 'json-registry'
 );
 
 -- ============================================================================
--- STEP 3: Insert data into sink tables (routing logic)
+-- STEP 3: Start routing jobs (continuous INSERT statements)
 -- ============================================================================
+-- Each INSERT runs as a continuous streaming job with:
+-- - Exactly-once processing semantics
+-- - Event-time processing with watermarks
+-- - Automatic checkpointing
+-- - Sub-5 second latency in steady state
+--
+-- Run each INSERT statement separately - they will run continuously
 
 -- Route PAYMENT messages
-INSERT INTO payment_topic
+INSERT INTO `payment-topic`
 SELECT
   messageID,
   `timestamp`,
   text,
   properties.messageType.`string` AS messageType
-FROM ibm_mq_input
+FROM `ibm.mq.input`
 WHERE properties.messageType.`string` = 'PAYMENT';
 
 -- Route TRANSFER messages
-INSERT INTO transfer_topic
+INSERT INTO `transfer-topic`
 SELECT
   messageID,
   `timestamp`,
   text,
   properties.messageType.`string` AS messageType
-FROM ibm_mq_input
+FROM `ibm.mq.input`
 WHERE properties.messageType.`string` = 'TRANSFER';
 
 -- Route NOTIFICATION messages
-INSERT INTO notification_topic
+INSERT INTO `notification-topic`
 SELECT
   messageID,
   `timestamp`,
   text,
   properties.messageType.`string` AS messageType
-FROM ibm_mq_input
+FROM `ibm.mq.input`
 WHERE properties.messageType.`string` = 'NOTIFICATION';
 
--- Route unknown/null message types
-INSERT INTO unknown_message_type_topic
-SELECT
-  messageID,
-  `timestamp`,
-  text,
-  COALESCE(properties.messageType.`string`, 'UNKNOWN') AS messageType
-FROM ibm_mq_input
-WHERE properties.messageType.`string` IS NULL
-   OR (properties.messageType.`string` <> 'PAYMENT'
-       AND properties.messageType.`string` <> 'TRANSFER'
-       AND properties.messageType.`string` <> 'NOTIFICATION');
+-- ============================================================================
+-- VERIFICATION
+-- ============================================================================
+-- After starting the jobs, check:
+-- 1. Jobs tab - should show 3 running jobs
+-- 2. Send test messages to IBM MQ
+-- 3. Check output topics (payment-topic, transfer-topic, notification-topic)
+-- 4. Expect ~1-5 second end-to-end latency
+
+-- Query to see incoming messages (run in a separate session):
+-- SELECT * FROM `ibm.mq.input` LIMIT 10;
+
+-- Query to see routed payment messages:
+-- SELECT * FROM `payment-topic` LIMIT 10;
+
+-- Count messages by type:
+-- SELECT
+--   properties.messageType.`string` AS messageType,
+--   COUNT(*) AS message_count
+-- FROM `ibm.mq.input`
+-- GROUP BY properties.messageType.`string`;
 
 -- ============================================================================
--- VERIFICATION QUERIES
+-- TROUBLESHOOTING
 -- ============================================================================
-
--- Count messages by type (continuous query)
-SELECT
-  properties.messageType.`string` AS messageType,
-  COUNT(*) AS message_count
-FROM ibm_mq_input
-GROUP BY properties.messageType.`string`;
-
--- View recent payment messages
-SELECT * FROM payment_topic LIMIT 10;
-
--- Monitor throughput per message type
-SELECT
-  TUMBLE_START(proc_time, INTERVAL '1' MINUTE) AS window_start,
-  properties.messageType.`string` AS messageType,
-  COUNT(*) AS message_count
-FROM ibm_mq_input
-GROUP BY
-  TUMBLE(proc_time, INTERVAL '1' MINUTE),
-  properties.messageType.`string`;
+--
+-- Error: "Topic 'ibm_mq_input' collides with existing topic: ibm.mq.input"
+-- Solution: Use backticks around table names with dots: `ibm.mq.input`
+--
+-- Error: "Unsupported format: json"
+-- Solution: Use 'value.format' = 'json-registry' (not 'json')
+--
+-- Error: "Schema doesn't match"
+-- Solution: Delete schema from Schema Registry and let Flink create it fresh
+--
+-- Error: "Unsupported JSON schema type org.everit.json.schema.NullSchema"
+-- Solution: Remove all "type": "null" fields from the JSON schema
+--
+-- Error: "Table already exists"
+-- Solution: DROP TABLE `table-name` first
+--
+-- Jobs running but no output:
+-- - Check job metrics in Jobs tab (records in/out)
+-- - Verify watermark settings (default is 12 minutes on event time)
+-- - After initial checkpoint, latency should be sub-5 seconds
+-- - Look for exceptions in job details

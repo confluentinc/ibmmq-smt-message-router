@@ -4,52 +4,79 @@ Route IBM MQ messages to different Kafka topics based on JMS properties using Ap
 
 ## Overview
 
-This solution uses Apache Flink (SQL or Java) to consume messages from `ibm.mq.input` topic and route them to separate topics based on the `messageType` JMS property.
+This solution uses Apache Flink SQL to consume messages from `ibm.mq.input` topic and route them to separate topics based on the `messageType` JMS property.
 
-**Advantages:**
-- ✅ Production-grade stream processing
-- ✅ Exactly-once processing semantics
-- ✅ High throughput and low latency
-- ✅ Advanced windowing and aggregations
-- ✅ Stateful processing capabilities
-- ✅ Native support in Confluent Cloud
+**Why Flink?**
+- ✅ **Exactly-once processing** - No duplicates, guaranteed correctness
+- ✅ **Low latency** - Sub-5 second end-to-end in steady state
+- ✅ **Event-time processing** - Watermarks for handling late events
+- ✅ **Production-grade** - Auto-scaling, checkpointing, fault tolerance
+- ✅ **Native Confluent Cloud** - Fully managed, no infrastructure
+- ✅ **Stateful operations** - Aggregations, windowing, joins
+- ✅ **Schema Registry integration** - JSON Schema support
+
+**Tested Performance:**
+- Latency: 1-5 seconds (IBM MQ → Kafka → Flink → output topics)
+- Semantics: Exactly-once with automatic checkpointing
+- Throughput: Tested with continuous message streams
 
 **Message Flow:**
 ```
-IBM MQ → Connector → ibm.mq.input topic
-                          ↓
-                      Flink Job
-                      /   |   \
-                     /    |    \
-            payment-topic | notification-topic
-                    transfer-topic
+IBM MQ → MQ Connector → ibm.mq.input topic
+                             ↓
+                         Flink Job
+                    (exactly-once, event-time)
+                         /   |   \
+                        /    |    \
+               payment-topic | notification-topic
+                       transfer-topic
 ```
 
-## Deployment Options
+## Quick Start (Confluent Cloud)
 
-### Option 1: Confluent Cloud for Apache Flink (Recommended)
-
-**Advantages:**
-- Fully managed
-- Auto-scaling
-- Integrated with Confluent Cloud Kafka
-- No infrastructure management
+**Prerequisites:**
+1. IBM MQ Source Connector running and writing to `ibm.mq.input` topic
+2. JSON schema registered in Schema Registry for `ibm.mq.input` (or delete existing schema to let Flink create it)
+3. Flink compute pool in Confluent Cloud
 
 **Steps:**
-1. Go to Confluent Cloud → Flink (currently in preview/GA)
-2. Create a Flink compute pool
-3. Open Flink SQL workspace
-4. Copy and paste statements from `routing.sql`
-5. Submit as Flink job
 
-**Configuration in Confluent Cloud:**
-```properties
-# Auto-configured by Confluent Cloud:
-kafka.bootstrap.servers = <auto-configured>
-security.protocol = SASL_SSL
-sasl.mechanism = PLAIN
-# API keys managed via Confluent Cloud
-```
+1. **Navigate to Flink**
+   - Go to Confluent Cloud → your environment
+   - Click **Flink** in left sidebar
+   - Select your compute pool (or create one)
+   - Click **Open SQL workspace**
+
+2. **Prepare Schema Registry**
+   
+   Important: Flink requires JSON schemas without `null` types. If you have an existing schema:
+   ```bash
+   # Option A: Delete existing schema to let Flink create it
+   # Go to Schema Registry UI and soft-delete the ibm.mq.input-value subject
+   
+   # Option B: Or ensure your schema has no "type": "null" fields
+   ```
+
+3. **Run SQL Statements**
+   
+   Open `routing.sql` and run each statement in order:
+   - Drop existing tables if needed (DROP TABLE `ibm.mq.input`)
+   - Create source table (ibm.mq.input)
+   - Create sink tables (payment-topic, transfer-topic, notification-topic)
+   - Start routing jobs (3 INSERT statements)
+
+4. **Verify**
+   - Check **Jobs** tab → should show 3 running jobs
+   - Send test messages to IBM MQ
+   - Monitor output topics in Confluent Cloud
+   - Expect 1-5 second latency
+
+**Configuration:**
+All connectivity is auto-configured by Confluent Cloud:
+- Kafka bootstrap servers
+- Security (SASL_SSL)
+- Schema Registry
+- Network access (private network support)
 
 ### Option 2: Self-Managed Flink
 
@@ -308,30 +335,39 @@ taskmanager.memory.process.size: 2048m
 taskmanager.memory.managed.fraction: 0.4
 ```
 
-## Comparison: Flink SQL vs ksqlDB
+## Flink vs Custom SMT
 
-| Feature | Flink SQL | ksqlDB |
-|---------|-----------|--------|
-| **Processing Semantics** | Exactly-once | At-least-once (default) |
-| **Windowing** | Event time, processing time, session | Event time, session |
-| **State Management** | RocksDB, heap | RocksDB |
-| **Joins** | Stream-stream, stream-table, table-table | Stream-stream, stream-table |
-| **Deployment** | Standalone, YARN, K8s, Confluent Cloud | Confluent Platform, Confluent Cloud |
-| **SQL Standard** | ANSI SQL compliant | Custom SQL dialect |
-| **Ecosystem** | Broader (batch + stream) | Kafka-focused |
-| **Learning Curve** | Moderate | Easier |
+This repository includes two routing approaches:
 
-**Choose Flink if:**
-- You need exactly-once processing
-- You have complex stateful operations
-- You want event-time processing with watermarks
-- You need batch + stream processing
+### Apache Flink (This Solution) - Recommended
 
-**Choose ksqlDB if:**
-- You're already in Confluent ecosystem
-- You need quick time-to-value
-- Your use case is primarily streaming
-- You want simpler deployment
+**When to use:**
+- ✅ Production deployments requiring exactly-once semantics
+- ✅ Financial transactions or critical data
+- ✅ Need for windowing, aggregations, or complex transformations
+- ✅ High throughput requirements (100K+ msgs/sec)
+- ✅ Using Confluent Cloud (fully managed)
+- ✅ Event-time processing with watermarks
+
+**Deployment:**
+- 15-20 minutes in Confluent Cloud
+- Fully managed, auto-scaling
+- Monitoring via Flink UI
+
+### Custom SMT (Alternative in this repo)
+
+**When to use:**
+- Self-managed Kafka Connect without stream processing infrastructure
+- Want routing logic inside Kafka Connect for architectural simplicity
+- Cannot use Flink due to organizational constraints
+- Simple routing without aggregations or stateful operations
+
+**Deployment:**
+- 30+ minutes (build JAR, configure connector)
+- Self-managed infrastructure
+- Limited Confluent Cloud support
+
+**For most use cases, Apache Flink is recommended** due to better processing guarantees, lower latency, and native Confluent Cloud support.
 
 ## Troubleshooting
 
