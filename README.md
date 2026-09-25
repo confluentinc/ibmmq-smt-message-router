@@ -9,7 +9,9 @@ Route JMS messages from IBM MQ or ActiveMQ to different Kafka topics based on me
 
 ## Problem
 
-JMS Source Connectors store message properties in a nested JSON structure:
+When a single MQ queue contains messages of different types (payments, transfers, notifications), you need to route them to different Kafka topics. The alternative—deploying one connector per queue per message type—raises **significant cost and scaling concerns**.
+
+However, JMS Source Connectors store message properties in a nested JSON structure:
 
 ```json
 {
@@ -27,6 +29,7 @@ JMS Source Connectors store message properties in a nested JSON structure:
 - Standard Kafka Connect SMTs cannot extract from nested JSON paths
 - JMS properties are not copied to Kafka headers by default  
 - The value is deeply nested: `properties.messageType.string`
+- Running separate connectors per message type is costly and doesn't scale
 
 ## Solutions
 
@@ -47,13 +50,14 @@ Route messages using Flink SQL with exactly-once semantics and sub-5 second late
 
 ### ✅ Alternative: Custom SMT (Tested)
 
-Extract nested JMS properties using a custom Kafka Connect SMT and route at the connector level.
+Extract nested JMS properties using a **custom SMT** (`JmsPropertyToHeader`) that reads the nested JSON and adds the value as a Kafka header. Then use the **standard `ExtractTopic` SMT** (built into Confluent Cloud) to route based on that header—all at the connector level.
 
 **Why Custom SMT?**
 - ✅ **Sub-second latency** - Routing happens at connector level
 - ✅ **Lower storage costs** - Messages route directly to target topics
 - ✅ **Works in Confluent Cloud** - Tested and working
 - ✅ **Minimal infrastructure** - No separate stream processor needed
+- ✅ **Standard SMT for routing** - Uses built-in `ExtractTopic` transform
 
 **[See custom SMT solution →](jms-routing-smt/)**
 
@@ -148,31 +152,26 @@ Lower storage costs, no audit trail in input topic
 
 ### Required Infrastructure
 
-**MQ Broker Side (Message Aggregation):**
+**MQ Broker Side:**
 
-This solution requires an aggregated message queue that the connector can read from. Your MQ broker must be configured with one of these patterns:
+This solution works with any MQ queue that contains messages with JMS properties. Common scenarios:
 
-- **IBM MQ**: **Streaming Queues** (IBM MQ 9.2.3+)
-  - Automatically duplicates messages from application queues to an aggregation queue
-  - Non-disruptive to existing applications
-  
-- **ActiveMQ Classic**: **Network of Brokers**
-  - Hub-and-spoke topology where spoke brokers forward messages to central hub
-  - Connector reads from hub's aggregated queue
-  
-- **ActiveMQ Artemis**: **Artemis Core Hub** (Artemis 2.x+)
-  - Federation-based hub where spoke brokers redistribute messages
-  - Connector reads from federated queues on hub
+1. **Single queue with mixed message types** - Messages of different types (PAYMENT, TRANSFER, NOTIFICATION) sent to the same queue, each with a JMS property indicating type
+
+2. **Aggregated queue from multiple sources** - If messages come from multiple application queues, you can optionally aggregate them using:
+   - **IBM MQ**: **Streaming Queues** (IBM MQ 9.2.3+) - Duplicates messages from app queues to aggregation queue
+   - **ActiveMQ Classic**: **Network of Brokers** - Hub-and-spoke topology forwarding to central hub
+   - **ActiveMQ Artemis**: **Artemis Core Hub** (Artemis 2.x+) - Federation-based hub for message redistribution
 
 **Kafka Side:**
 - JMS Source Connector deployed (IBM MQ or ActiveMQ connector)
 - Kafka topics created (or auto-creation enabled)
 - **For Flink**: Flink compute pool in Confluent Cloud
-- **For Custom SMT**: Custom plugin upload capability
+- **For Custom SMT**: Custom plugin upload capability in Confluent Cloud
 
 ### JMS Messages
 - Messages must include JMS properties for routing (e.g., `messageType`)
-- See [Example: Setting JMS Properties](#example-setting-jms-properties) below
+- See [Example: Setting JMS Properties](#example-setting-jms-properties) below for code examples
 
 ## Quick Start
 
@@ -235,9 +234,11 @@ Performance verified:
 
 ## Example: Setting JMS Properties
 
-Your JMS messages must include properties for routing to work.
+Your JMS messages must include properties for routing to work. The examples below show **how to set JMS properties in your message producer code**. When the JMS Source Connector reads these messages from the queue, it automatically converts the JMS property (e.g., `messageType`) into the nested JSON structure (`properties.messageType.string`) that the routing solutions extract from.
 
 ### IBM MQ Example
+
+This example demonstrates setting a `messageType` JMS property on an IBM MQ message. The IBM MQ Source Connector will convert this property into the nested structure `properties.messageType.string` in Kafka.
 
 ```java
 import com.ibm.mq.jms.*;
@@ -263,6 +264,8 @@ producer.send(msg);
 ```
 
 ### ActiveMQ Example
+
+This example demonstrates setting a `messageType` JMS property on an ActiveMQ message. The ActiveMQ Source Connector will convert this property into the nested structure `properties.messageType.string` in Kafka.
 
 ```java
 import org.apache.activemq.*;
