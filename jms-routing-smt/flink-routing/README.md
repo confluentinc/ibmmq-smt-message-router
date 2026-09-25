@@ -7,14 +7,14 @@ Route IBM MQ messages to different Kafka topics based on JMS properties using Ap
 This solution uses Apache Flink SQL to consume messages from `ibm.mq.input` topic and route them to separate topics based on the `messageType` JMS property.
 
 **Why Flink?**
-- **Exactly-once processing** - No duplicates, guaranteed correctness
-- **Low latency** - Sub-5 second end-to-end in steady state
-- **Event-time processing** - Watermarks for handling late events
-- **Production-grade** - Auto-scaling, checkpointing, fault tolerance
-- **Native Confluent Cloud** - Fully managed, no infrastructure
-- **Stateful operations** - Aggregations, windowing, joins
-- **Schema Registry integration** - JSON Schema support
-- **Messages retained in input topic** - Audit trail and re-processing capability
+- ✅ **Exactly-once processing** - No duplicates, guaranteed correctness
+- ✅ **Low latency** - Sub-5 second end-to-end in steady state
+- ✅ **Event-time processing** - Watermarks for handling late events
+- ✅ **Production-grade** - Auto-scaling, checkpointing, fault tolerance
+- ✅ **Native Confluent Cloud** - Fully managed, no infrastructure
+- ✅ **Stateful operations** - Aggregations, windowing, joins
+- ✅ **Schema Registry integration** - JSON Schema support
+- ✅ **Messages retained in input topic** - Audit trail and re-processing capability
 
 **Tested Performance:**
 - Latency: 1-5 seconds (IBM MQ → Kafka → Flink → output topics)
@@ -39,10 +39,10 @@ Messages available in BOTH ibm.mq.input AND routed topics
 **Key Architectural Benefit:**
 
 With Flink, messages are **retained in the `ibm.mq.input` topic** and then copied to output topics. This means:
-- Complete audit trail of all incoming messages
-- Can re-process messages by resetting Flink job
-- Multiple Flink jobs can read from the same input topic
-- Original message structure preserved for debugging
+- ✅ Complete audit trail of all incoming messages
+- ✅ Can re-process messages by resetting Flink job
+- ✅ Multiple Flink jobs can read from the same input topic
+- ✅ Original message structure preserved for debugging
 
 **Alternative: Custom SMT routing** (in parent directory) routes at the connector level, so messages never appear in `ibm.mq.input`. This saves storage but loses the audit trail. See `../README.md` for comparison.
 
@@ -356,12 +356,12 @@ This repository includes two routing approaches:
 ### Apache Flink (This Solution) - Recommended
 
 **When to use:**
-- Production deployments requiring exactly-once semantics
-- Financial transactions or critical data
-- Need for windowing, aggregations, or complex transformations
-- High throughput requirements (100K+ msgs/sec)
-- Using Confluent Cloud (fully managed)
-- Event-time processing with watermarks
+- ✅ Production deployments requiring exactly-once semantics
+- ✅ Financial transactions or critical data
+- ✅ Need for windowing, aggregations, or complex transformations
+- ✅ High throughput requirements (100K+ msgs/sec)
+- ✅ Using Confluent Cloud (fully managed)
+- ✅ Event-time processing with watermarks
 
 **Deployment:**
 - 15-20 minutes in Confluent Cloud

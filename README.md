@@ -35,29 +35,29 @@ However, JMS Source Connectors store message properties in a nested JSON structu
 
 This repository provides **two tested, production-ready solutions**:
 
-### Recommended: Flink (Tested)
+### ✅ Recommended: Flink (Tested)
 
 Route messages using Flink SQL with exactly-once semantics and sub-5 second latency.
 
 **Why Flink?**
-- **Exactly-once processing** - No duplicates, guaranteed correctness
-- **Low latency** - 1-5 seconds end-to-end (tested)
-- **Messages retained in input topic** - Audit trail and re-processing
-- **Native Confluent Cloud support** - Fully managed, auto-scaling
-- **Stateful operations** - Aggregations, windowing, joins
+- ✅ **Exactly-once processing** - No duplicates, guaranteed correctness
+- ✅ **Low latency** - 1-5 seconds end-to-end (tested)
+- ✅ **Messages retained in input topic** - Audit trail and re-processing
+- ✅ **Native Confluent Cloud support** - Fully managed, auto-scaling
+- ✅ **Stateful operations** - Aggregations, windowing, joins
 
 **[See Flink routing solution →](jms-routing-smt/flink-routing/)**
 
-### Alternative: Custom SMT (Tested)
+### ✅ Alternative: Custom SMT (Tested)
 
 Extract nested JMS properties using a **custom SMT** (`JmsPropertyToHeader`) that reads the nested JSON and adds the value as a Kafka header. Then use the **standard `ExtractTopic` SMT** (built into Confluent Cloud) to route based on that header—all at the connector level.
 
 **Why Custom SMT?**
-- **Sub-second latency** - Routing happens at connector level
-- **Lower storage costs** - Messages route directly to target topics
-- **Works in Confluent Cloud** - Tested and working
-- **Minimal infrastructure** - No separate stream processor needed
-- **Standard SMT for routing** - Uses built-in `ExtractTopic` transform
+- ✅ **Sub-second latency** - Routing happens at connector level
+- ✅ **Lower storage costs** - Messages route directly to target topics
+- ✅ **Works in Confluent Cloud** - Tested and working
+- ✅ **Minimal infrastructure** - No separate stream processor needed
+- ✅ **Standard SMT for routing** - Uses built-in `ExtractTopic` transform
 
 **[See custom SMT solution →](jms-routing-smt/)**
 
