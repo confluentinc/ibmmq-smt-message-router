@@ -98,10 +98,10 @@ IBM MQ → Connector → ibm.mq.input topic (messages retained)
                           ↓
               payment-topic, transfer-topic, notification-topic
 ```
-- ✅ **Original messages preserved** in ibm.mq.input
-- ✅ Can re-process from input topic if needed
-- ✅ Multiple consumers can read the same input
-- ✅ Input topic serves as audit trail
+- **Original messages preserved** in ibm.mq.input
+- Can re-process from input topic if needed
+- Multiple consumers can read the same input
+- Input topic serves as audit trail
 - ❌ Higher storage costs (messages stored twice)
 
 **Custom SMT Approach:**
@@ -111,9 +111,9 @@ IBM MQ → Connector with SMT → Direct routing to target topics
               payment-topic, transfer-topic, notification-topic
               (ibm.mq.input bypassed - no messages stored there)
 ```
-- ✅ **Lower storage costs** (messages stored once)
-- ✅ Simpler data flow (no intermediate topic)
-- ✅ Sub-second latency (routing at connector level)
+- **Lower storage costs** (messages stored once)
+- Simpler data flow (no intermediate topic)
+- Sub-second latency (routing at connector level)
 - ❌ No audit trail in input topic
 - ❌ Cannot re-process from original input
 - ❌ Cannot have multiple routing strategies on same input
@@ -422,18 +422,18 @@ Messages NOT written to ibm.mq.input (routing happens at connector level)
 ### When Each Solution Shines
 
 **Apache Flink (Recommended):**
-- ✅ **Exactly-once processing** (critical for financial data)
-- ✅ **Low end-to-end latency** (1-5 seconds tested)
-- ✅ **High throughput** (100K-1M+ msgs/sec)
-- ✅ **Event-time processing** with watermarks
-- ✅ **Advanced features** (windowing, joins, aggregations, state)
-- ✅ **Native Confluent Cloud** support (fully managed)
-- ✅ **Production-grade** reliability
+- **Exactly-once processing** (critical for financial data)
+- **Low end-to-end latency** (1-5 seconds tested)
+- **High throughput** (100K-1M+ msgs/sec)
+- **Event-time processing** with watermarks
+- **Advanced features** (windowing, joins, aggregations, state)
+- **Native Confluent Cloud** support (fully managed)
+- **Production-grade** reliability
 
 **Custom SMT:**
-- ✅ Minimal infrastructure footprint (no separate stream processor)
-- ✅ Self-managed Kafka Connect environments
-- ✅ Simple routing without aggregations
+- Minimal infrastructure footprint (no separate stream processor)
+- Self-managed Kafka Connect environments
+- Simple routing without aggregations
 - ❌ No windowing or stateful operations
 - ❌ Limited Confluent Cloud support
 - ❌ Connector-dependent semantics
