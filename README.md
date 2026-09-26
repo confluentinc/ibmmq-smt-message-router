@@ -203,10 +203,13 @@ This solution works with any MQ queue that contains messages with JMS properties
 ## Tested Configuration
 
 Both solutions have been tested end-to-end with:
-- **IBM MQ Source Connector** in Confluent Cloud
+- **IBM MQ Source Connector** (IBM MQ 9.x) in Confluent Cloud
+- **ActiveMQ Source Connector** (ActiveMQ Classic 6.3.2) in Confluent Cloud
 - **Messages with JMS properties** (messageType: PAYMENT, TRANSFER, NOTIFICATION)
 - **Routing to multiple topics** based on messageType value
 - **Confluent Cloud deployment** (fully managed)
+
+**Verified behavior:** Both IBM MQ and ActiveMQ Classic use the identical nested JMS property structure (`properties.messageType.string`), so the routing solutions work without modification across both providers.
 
 Performance verified:
 - **Flink**: 1-5 seconds end-to-end latency, exactly-once semantics
@@ -228,7 +231,8 @@ Performance verified:
     │
     └── flink-routing/                 # Flink solution (RECOMMENDED)
         ├── README.md                  # Full Flink deployment guide
-        ├── routing.sql                # Flink SQL DDL and routing jobs
+        ├── routing.sql                # Flink SQL DDL and routing jobs (IBM MQ)
+        ├── activemq-routing.sql       # Flink SQL DDL and routing jobs (ActiveMQ)
         └── java-router/               # Flink Table API (Java option)
 ```
 

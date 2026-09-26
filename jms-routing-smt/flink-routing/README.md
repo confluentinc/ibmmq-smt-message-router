@@ -1,10 +1,15 @@
 # Apache Flink Message Routing Solution
 
-Route IBM MQ messages to different Kafka topics based on JMS properties using Apache Flink.
+Route JMS messages from IBM MQ or ActiveMQ to different Kafka topics based on JMS properties using Apache Flink.
 
 ## Overview
 
-This solution uses Apache Flink SQL to consume messages from `ibm.mq.input` topic and route them to separate topics based on the `messageType` JMS property.
+This solution uses Apache Flink SQL to consume messages from JMS Source Connector topics and route them to separate topics based on the `messageType` JMS property.
+
+**Tested with:**
+- IBM MQ Source Connector (IBM MQ 9.x)
+- ActiveMQ Source Connector (ActiveMQ Classic 6.3.2)
+- Both use identical nested property structure: `properties.messageType.string`
 
 **Why Flink?**
 - ✅ **Exactly-once processing** - No duplicates, guaranteed correctness
