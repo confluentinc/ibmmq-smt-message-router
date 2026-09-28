@@ -44,10 +44,13 @@ blocks:
       # You can customize your CI job here
       #      env_vars:
       #        # custom env_vars
-      #      prologue:
-      #        commands:
-      #          # custom vault secrets
-      #          # custom prologue commands
+      prologue:
+        commands:
+          # Install Java 17 for Maven build (pom.xml requires Java 11+)
+          - sudo apt-get update && sudo apt-get install -y openjdk-17-jdk
+          - export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+          - export PATH=$JAVA_HOME/bin:$PATH
+          - java -version
       jobs:
         - name: "Build, Test, Release"
           commands:
