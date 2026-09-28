@@ -221,6 +221,10 @@ Both solutions have been tested end-to-end with all three major JMS providers:
 - **Flink**: 1-5 seconds end-to-end latency, exactly-once semantics
 - **Custom SMT**: Sub-second latency, messages route directly to target topics
 
+**Important Note - TLS Support:**
+- **IBM MQ Source Connector** supports TLS/SSL connections to IBM MQ brokers
+- **ActiveMQ Source Connector** does not currently support TLS/SSL connections in Confluent Cloud (uses plain TCP connections only)
+
 ## Repository Structure
 
 ```
