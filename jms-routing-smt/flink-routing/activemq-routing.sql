@@ -23,7 +23,7 @@ CREATE TABLE `activemq.input` (
 -- STEP 2: Create sink tables for each message type
 -- Payment topic
 CREATE TABLE `activemq-payment` (
-  messageID STRING,
+  messageID STRING NOT NULL,
   `timestamp` DOUBLE,
   text STRING,
   messageType STRING,
@@ -35,7 +35,7 @@ CREATE TABLE `activemq-payment` (
 
 -- Transfer topic
 CREATE TABLE `activemq-transfer` (
-  messageID STRING,
+  messageID STRING NOT NULL,
   `timestamp` DOUBLE,
   text STRING,
   messageType STRING,
@@ -47,7 +47,7 @@ CREATE TABLE `activemq-transfer` (
 
 -- Notification topic
 CREATE TABLE `activemq-notification` (
-  messageID STRING,
+  messageID STRING NOT NULL,
   `timestamp` DOUBLE,
   text STRING,
   messageType STRING,

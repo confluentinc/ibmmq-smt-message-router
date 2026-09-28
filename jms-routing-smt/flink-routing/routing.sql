@@ -53,7 +53,7 @@ CREATE TABLE `ibm.mq.input` (
 
 -- Payment messages sink
 CREATE TABLE `payment-topic` (
-  messageID STRING,
+  messageID STRING NOT NULL,
   `timestamp` DOUBLE,
   text STRING,
   messageType STRING,
@@ -65,7 +65,7 @@ CREATE TABLE `payment-topic` (
 
 -- Transfer messages sink
 CREATE TABLE `transfer-topic` (
-  messageID STRING,
+  messageID STRING NOT NULL,
   `timestamp` DOUBLE,
   text STRING,
   messageType STRING,
@@ -77,7 +77,7 @@ CREATE TABLE `transfer-topic` (
 
 -- Notification messages sink
 CREATE TABLE `notification-topic` (
-  messageID STRING,
+  messageID STRING NOT NULL,
   `timestamp` DOUBLE,
   text STRING,
   messageType STRING,
@@ -92,9 +92,12 @@ CREATE TABLE `notification-topic` (
 -- ============================================================================
 -- Each INSERT runs as a continuous streaming job with:
 -- - Exactly-once processing semantics
--- - Event-time processing with watermarks
+-- - Processing-time routing (messages routed based on arrival time)
 -- - Automatic checkpointing
--- - Sub-5 second latency in steady state
+-- - 1-5 second latency (tested)
+--
+-- Note: For event-time processing with watermarks (handling late events),
+-- see Advanced Features section in README.md
 --
 -- Run each INSERT statement separately - they will run continuously
 

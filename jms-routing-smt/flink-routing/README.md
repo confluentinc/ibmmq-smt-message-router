@@ -14,13 +14,15 @@ This solution uses Apache Flink SQL to consume messages from JMS Source Connecto
 
 **Why Flink?**
 - ✅ **Exactly-once processing** - No duplicates, guaranteed correctness
-- ✅ **Low latency** - Sub-5 second end-to-end in steady state
-- ✅ **Event-time processing** - Watermarks for handling late events
+- ✅ **Low latency** - 1-5 seconds end-to-end (tested)
+- ✅ **Processing-time routing** - Simple, fast routing based on arrival time
 - ✅ **Production-grade** - Auto-scaling, checkpointing, fault tolerance
 - ✅ **Native Confluent Cloud** - Fully managed, no infrastructure
-- ✅ **Stateful operations** - Aggregations, windowing, joins
+- ✅ **Stateful operations** - Aggregations, windowing, joins (when needed)
 - ✅ **Schema Registry integration** - JSON Schema support
 - ✅ **Messages retained in input topic** - Audit trail and re-processing capability
+
+**Note:** The provided routing SQL uses processing-time semantics for low latency. For event-time processing with watermarks (handling late-arriving events), see the [Advanced Features](#5-late-event-handling) section.
 
 **Tested Performance:**
 - Latency: 1-5 seconds (IBM MQ → Kafka → Flink → output topics)

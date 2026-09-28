@@ -31,21 +31,22 @@ This repository provides a **custom Kafka Connect SMT** that:
 
 1. **Extracts** nested JMS properties like `properties.messageType.string`
 2. **Copies** the value to a Kafka message header
-3. **Routes** messages using the standard `ExtractTopic$Header` SMT
 
-### Architecture
+**Note:** Topic routing based on header values would require an additional custom SMT (not included). For a complete, tested solution with routing, use **[Apache Flink →](flink-routing/)**.
+
+### Conceptual Architecture
 
 ```
 IBM MQ → IBM MQ Source Connector
            ↓
          JmsPropertyToHeader (this custom SMT)
            ↓ (adds Kafka header: messageType=PAYMENT)
-         ExtractTopic$Header (standard Kafka Connect SMT)
+         [Additional header-based routing SMT needed]
            ↓
          Routes to: payment-topic, transfer-topic, notification-topic
 ```
 
-This approach keeps routing logic **inside Kafka Connect**, without requiring additional stream processing infrastructure.
+**⚠️ This approach is conceptual.** Standard Kafka Connect SMTs do not support header-based topic routing. For production use, we **strongly recommend [Apache Flink routing →](flink-routing/)** which provides exactly-once semantics, tested performance, and native Confluent Cloud support.
 
 ## Recommended Alternative: Apache Flink
 
@@ -138,25 +139,31 @@ For most users, especially those on Confluent Cloud, **we recommend Apache Flink
 
 ### SMT Configuration
 
-Add these transforms to your IBM MQ Source Connector configuration:
+**⚠️ Important:** This configuration example is **conceptual**. The `JmsPropertyToHeader` custom SMT (provided in this repository) extracts nested JMS properties to headers. However, **topic routing based on header values requires an additional custom SMT** that is not included in this repository. 
+
+For a **tested, working solution**, use **[Apache Flink routing →](flink-routing/)** which provides exactly-once semantics and native Confluent Cloud support.
+
+**Conceptual configuration** (requires additional development):
 
 ```json
 {
-  "connector.class": "IbmMQSource",
+  "connector.class": "io.confluent.connect.ibm.mq.IbmMQSourceConnector",
   "kafka.topic": "ibm.mq.input",
   "jms.destination.name": "DEV.QUEUE.1",
   
-  "transforms": "copyMessageType,routeByMessageType",
+  "transforms": "copyMessageType",
   
   "transforms.copyMessageType.type": "io.confluent.connect.transforms.JmsPropertyToHeader$Value",
   "transforms.copyMessageType.property.name": "messageType",
   "transforms.copyMessageType.header.name": "messageType",
-  "transforms.copyMessageType.skip.missing": "true",
+  "transforms.copyMessageType.skip.missing": "true"
   
-  "transforms.routeByMessageType.type": "io.confluent.connect.transforms.ExtractTopic$Header",
-  "transforms.routeByMessageType.header": "messageType",
-  "transforms.routeByMessageType.topic.format": "${topic}-topic",
-  "transforms.routeByMessageType.skip.missing.or.null": "true"
+  // Note: Topic routing based on the messageType header would require
+  // an additional custom SMT (not provided in this repository).
+  // Standard Kafka Connect SMTs (RegexRouter, TimestampRouter) do not
+  // support header-based routing.
+  //
+  // For production use, we recommend Apache Flink instead (see flink-routing/)
 }
 ```
 
@@ -169,14 +176,6 @@ Add these transforms to your IBM MQ Source Connector configuration:
 | `property.name` | String | Required | Name of the JMS property to extract (e.g., "messageType") |
 | `header.name` | String | Required | Name of the Kafka header to create |
 | `skip.missing` | Boolean | true | If true, skip records where the property is missing or null. If false, throw an error. |
-
-**ExtractTopic$Header Parameters:** (Standard Kafka Connect SMT)
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `header` | String | Required | Name of the header to extract (should match `header.name` above) |
-| `topic.format` | String | `${topic}` | Format for the destination topic. Use `${topic}` as placeholder for header value |
-| `skip.missing.or.null` | Boolean | false | Skip records where header is missing or null |
 
 ### Processing Flow
 
@@ -193,20 +192,21 @@ Add these transforms to your IBM MQ Source Connector configuration:
 }
 ```
 
-**Step 1: JmsPropertyToHeader SMT**
+**Step 1: JmsPropertyToHeader SMT** (provided in this repository)
 - Extracts: `properties.messageType.string = "PAYMENT"`
 - Adds Kafka header: `messageType: "PAYMENT"`
 - Message value: unchanged
+- Topic: remains `ibm.mq.input`
 
-**Step 2: ExtractTopic$Header SMT**
-- Reads header: `messageType = "PAYMENT"`
-- Applies format: `"${topic}-topic"` → `"payment-topic"`
-- Routes message to: `payment-topic`
+**Step 2: Topic routing** (requires additional custom SMT, not included)
+- Would need to read header: `messageType = "PAYMENT"`
+- Would route message to destination topic (e.g., `payment-topic`)
 
-**Result:**
-- Topic: `payment-topic`
-- Headers: `messageType: "PAYMENT"`
-- Value: Original message unchanged
+**Note:** Standard Kafka Connect does not provide header-based topic routing. For a complete, tested routing solution, use **[Apache Flink →](flink-routing/)** which provides:
+- Exactly-once processing
+- 1-5 second latency
+- Native Confluent Cloud support
+- No additional SMT development required
 
 ## Deployment to Confluent Cloud
 
@@ -343,28 +343,26 @@ Messages available in BOTH input and output topics
 - Stateful operations (aggregations, windowing, joins)
 - Native Confluent Cloud support
 
-### Custom SMT Routing (This Repository)
+### Custom SMT Routing (This Repository - Conceptual)
 ```
 IBM MQ → IBM MQ Source Connector
            ↓
          [Transform Chain]
            ↓
-         JmsPropertyToHeader (custom SMT - this repo)
+         JmsPropertyToHeader (custom SMT - provided in this repo)
            ↓ (adds Kafka header: messageType=PAYMENT)
-         ExtractTopic$Header (standard Kafka Connect SMT)
+         [Header-based routing SMT - NOT PROVIDED, would need custom development]
            ↓
-         Routes DIRECTLY to: payment-topic, transfer-topic, notification-topic
+         Would route DIRECTLY to: payment-topic, transfer-topic, notification-topic
 
-All processing happens within Kafka Connect - no external stream processors needed
-Messages NOT written to ibm.mq.input (routing happens at connector level)
+⚠️  CONCEPTUAL - Header-based topic routing requires additional custom SMT development
 ```
 
-**Benefits:**
-- Minimal infrastructure (no separate stream processor)
-- **Lower storage costs** (messages stored once, not in input topic)
-- **Sub-second latency** (routing at connector level)
-- Routing logic in connector layer
-- Good for simple routing without aggregations
+**Limitations:**
+- ⚠️ **Incomplete solution** - Only provides property extraction, not routing
+- Header-based topic routing SMT not included (would require custom development)
+- Standard Kafka Connect SMTs (RegexRouter, TimestampRouter) don't support header routing
+- **For production: Use [Apache Flink →](flink-routing/) instead** (tested, working, exactly-once)
 
 ## Repository Structure
 

@@ -50,7 +50,7 @@ public class FlinkMessageRouter {
         String createSourceTable = String.format(
             "CREATE TABLE ibm_mq_input (" +
             "  `messageID` STRING," +
-            "  `timestamp` BIGINT," +
+            "  `timestamp` DOUBLE," +
             "  `properties` ROW<" +
             "    `messageType` ROW<" +
             "      `propertyType` STRING," +
@@ -65,7 +65,7 @@ public class FlinkMessageRouter {
             "  'properties.bootstrap.servers' = '%s'," +
             "  'properties.group.id' = 'flink-mq-router'," +
             "  'scan.startup.mode' = 'latest-offset'," +
-            "  'format' = 'json'," +
+            "  'value.format' = 'json-registry'," +
             "  'json.fail-on-missing-field' = 'false'," +
             "  'json.ignore-parse-errors' = 'true'" +
             "  %s" +
@@ -138,8 +138,8 @@ public class FlinkMessageRouter {
 
         String createSinkTable = String.format(
             "CREATE TABLE %s (" +
-            "  `messageID` STRING," +
-            "  `timestamp` BIGINT," +
+            "  `messageID` STRING NOT NULL," +
+            "  `timestamp` DOUBLE," +
             "  `text` STRING," +
             "  `messageType` STRING," +
             "  PRIMARY KEY (`messageID`) NOT ENFORCED" +
@@ -147,7 +147,7 @@ public class FlinkMessageRouter {
             "  'connector' = 'kafka'," +
             "  'topic' = '%s'," +
             "  'properties.bootstrap.servers' = '%s'," +
-            "  'format' = 'json'," +
+            "  'value.format' = 'json-registry'," +
             "  'sink.partitioner' = 'default'" +
             "  %s" +
             ")",

@@ -23,7 +23,7 @@ CREATE TABLE `artemis.input` (
 -- STEP 2: Create sink tables for each message type
 -- Payment topic
 CREATE TABLE `artemis-payment` (
-  messageID STRING,
+  messageID STRING NOT NULL,
   `timestamp` DOUBLE,
   text STRING,
   messageType STRING,
@@ -35,7 +35,7 @@ CREATE TABLE `artemis-payment` (
 
 -- Transfer topic
 CREATE TABLE `artemis-transfer` (
-  messageID STRING,
+  messageID STRING NOT NULL,
   `timestamp` DOUBLE,
   text STRING,
   messageType STRING,
@@ -47,7 +47,7 @@ CREATE TABLE `artemis-transfer` (
 
 -- Notification topic
 CREATE TABLE `artemis-notification` (
-  messageID STRING,
+  messageID STRING NOT NULL,
   `timestamp` DOUBLE,
   text STRING,
   messageType STRING,
