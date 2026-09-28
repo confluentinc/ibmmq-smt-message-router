@@ -20,8 +20,14 @@ show-args:
 
 init-ci:
 	@echo "Initializing CI environment..."
+	@# Install Java 17 if not available
+	@if ! command -v java >/dev/null 2>&1 || ! java -version 2>&1 | grep -q "version \"1[1-9]\|version \"[2-9]"; then \
+		echo "Installing Java 17..."; \
+		sudo apt-get update && sudo apt-get install -y openjdk-17-jdk maven; \
+	fi
+	@java -version 2>&1 | head -1
 	@which mvn > /dev/null || (echo "Maven not found" && exit 1)
-	@echo "Maven found"
+	@mvn -version | head -1
 
 build:
 	@echo "Building custom SMT plugin..."
