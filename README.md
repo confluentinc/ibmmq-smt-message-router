@@ -32,7 +32,9 @@ Two approaches tested and working in Confluent Cloud:
 Route using Flink SQL. Messages land in an input topic first, then Flink routes them.
 
 ```sql
-INSERT INTO payment_topic SELECT * FROM jms_input WHERE messageType = 'PAYMENT';
+INSERT INTO `payment-topic` 
+SELECT * FROM `ibm.mq.input` 
+WHERE properties.messageType.string = 'PAYMENT';
 ```
 
 **Pros:** Exactly-once, keeps input topic, supports aggregations  
@@ -144,7 +146,7 @@ Add to your connector config (works for IBM MQ, ActiveMQ Classic, and ActiveMQ A
 
 ```json
 {
-  "connector.class": "IbmMQSource",  // or "ActiveMQSource"
+  "connector.class": "IbmMQSource",
   "output.data.format": "JSON",
   "transforms": "routeByJsonPath",
   "transforms.routeByJsonPath.type": "io.confluent.connect.transforms.ExtractTopic$Value",
@@ -153,6 +155,8 @@ Add to your connector config (works for IBM MQ, ActiveMQ Classic, and ActiveMQ A
   "transforms.routeByJsonPath.skip.missing.or.null": "true"
 }
 ```
+
+Use `"connector.class": "ActiveMQSource"` for ActiveMQ Classic or ActiveMQ Artemis.
 
 The SMT extracts `properties.messageType.string` from the message JSON and routes to that topic name.
 

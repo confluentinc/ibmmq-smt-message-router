@@ -56,9 +56,9 @@ While building a custom SMT to extract nested JMS properties (`properties.messag
   "name": "ActiveMQSourceConnector_0",
   "config": {
     "connector.class": "ActiveMQSource",
-    "activemq.url": "tcp://74.234.194.75:61616",
-    "activemq.username": "admin",
-    "activemq.password": "admin",
+    "activemq.url": "tcp://your-activemq-host:61616",
+    "activemq.username": "your-username",
+    "activemq.password": "your-password",
     "jms.destination.name": "DEV.QUEUE",
     "kafka.topic": "activemq.jsonpath.input",
     "output.data.format": "JSON",

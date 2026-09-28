@@ -84,7 +84,7 @@ MQ → Connector with SMT → payment, transfer, notification
 
 **Choose based on your requirements:**
 - Need audit trail or re-processing? → **Apache Flink**
-- Want minimal storage and direct routing? → **Custom SMT**
+- Want minimal storage and direct routing? → **JSON_PATH SMT**
 
 ## Which to Use?
 
