@@ -1,62 +1,47 @@
-.PHONY: show-args init-ci build test release-ci epilogue-ci testbreak-after help
-
-# This is a documentation/configuration example repository
-# Most CI targets are no-ops since there's no code to build or test
+.PHONY: show-args init-ci build test release-ci epilogue-ci testbreak-after help clean
 
 help:
-	@echo "JMS SMT Message Router - Configuration Examples Repository"
+	@echo "JMS Message Routing to Kafka"
 	@echo ""
 	@echo "Available targets:"
 	@echo "  show-args       - Display build arguments"
 	@echo "  init-ci         - Initialize CI environment"
-	@echo "  build           - Build (no-op for config repo)"
-	@echo "  test            - Run tests (validation)"
-	@echo "  release-ci      - Release artifacts (no-op)"
+	@echo "  build           - Build custom SMT plugin"
+	@echo "  test            - Run tests"
+	@echo "  clean           - Clean build artifacts"
+	@echo "  release-ci      - Release artifacts"
 	@echo "  epilogue-ci     - CI epilogue tasks"
 	@echo "  testbreak-after - Post-test cleanup"
 
 show-args:
 	@echo "Repository: ibmmq-smt-message-router"
-	@echo "Type: Configuration Examples"
-	@echo "Contents: SMT routing patterns for JMS Source Connectors (IBM MQ, ActiveMQ)"
+	@echo "Type: JMS Routing Solutions"
+	@echo "Contents: Flink SQL routing + Custom SMT for JMS Source Connectors"
 
 init-ci:
 	@echo "Initializing CI environment..."
-	@echo "No dependencies to install for configuration-only repository"
+	@which mvn > /dev/null || (echo "Maven not found" && exit 1)
+	@echo "Maven found"
 
 build:
-	@echo "Building..."
-	@echo "No build required - configuration examples only"
+	@echo "Building custom SMT plugin..."
+	cd jms-routing-smt && mvn clean package
+	@echo "Build complete: jms-routing-smt/target/*.jar"
 
-test: validate-json validate-examples
+test:
+	@echo "Running tests..."
+	cd jms-routing-smt && mvn test
+	@echo "Tests complete"
 
-validate-json:
-	@echo "Validating JSON configuration files..."
-	@for file in examples/ibm-mq/*.json examples/activemq/*.json; do \
-		echo "Checking $$file..."; \
-		python3 -m json.tool $$file > /dev/null || exit 1; \
-	done
-	@echo "✓ All JSON files are valid"
-
-validate-examples:
-	@echo "Validating example configurations..."
-	@echo "Checking required IBM MQ example files exist..."
-	@test -f examples/ibm-mq/basic-routing.json || (echo "Missing ibm-mq/basic-routing.json" && exit 1)
-	@test -f examples/ibm-mq/routing-with-prefix.json || (echo "Missing ibm-mq/routing-with-prefix.json" && exit 1)
-	@test -f examples/ibm-mq/multi-dimensional-routing.json || (echo "Missing ibm-mq/multi-dimensional-routing.json" && exit 1)
-	@test -f examples/ibm-mq/routing-with-metadata.json || (echo "Missing ibm-mq/routing-with-metadata.json" && exit 1)
-	@test -f examples/ibm-mq/conditional-routing.json || (echo "Missing ibm-mq/conditional-routing.json" && exit 1)
-	@echo "Checking required ActiveMQ example files exist..."
-	@test -f examples/activemq/basic-routing.json || (echo "Missing activemq/basic-routing.json" && exit 1)
-	@test -f examples/activemq/routing-with-prefix.json || (echo "Missing activemq/routing-with-prefix.json" && exit 1)
-	@test -f examples/activemq/multi-dimensional-routing.json || (echo "Missing activemq/multi-dimensional-routing.json" && exit 1)
-	@test -f examples/activemq/routing-with-metadata.json || (echo "Missing activemq/routing-with-metadata.json" && exit 1)
-	@test -f examples/activemq/conditional-routing.json || (echo "Missing activemq/conditional-routing.json" && exit 1)
-	@echo "✓ All required example files present"
+clean:
+	@echo "Cleaning build artifacts..."
+	cd jms-routing-smt && mvn clean
+	rm -rf jms-routing-smt/target
+	@echo "Clean complete"
 
 release-ci:
 	@echo "Releasing artifacts..."
-	@echo "No artifacts to release - configuration examples only"
+	@echo "No automated release - plugin JAR in jms-routing-smt/target/"
 
 epilogue-ci:
 	@echo "Running CI epilogue tasks..."
