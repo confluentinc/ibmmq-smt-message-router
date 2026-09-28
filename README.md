@@ -221,10 +221,6 @@ Both solutions have been tested end-to-end with all three major JMS providers:
 - **Flink**: 1-5 seconds end-to-end latency, exactly-once semantics
 - **Custom SMT**: Sub-second latency, messages route directly to target topics
 
-**Important Note - TLS Support:**
-- **IBM MQ Source Connector** supports TLS/SSL connections to IBM MQ brokers
-- **ActiveMQ Source Connector** does not currently support TLS/SSL connections in Confluent Cloud (uses plain TCP connections only)
-
 ## Repository Structure
 
 ```
@@ -307,10 +303,10 @@ producer.send(msg);
 
 ## Resources
 
-- [IBM MQ Source Connector Documentation](https://docs.confluent.io/kafka-connectors/ibm-mq-source/current/overview.html)
-- [ActiveMQ Source Connector Documentation](https://docs.confluent.io/kafka-connectors/activemq-source/current/overview.html)
+- [IBM MQ Source Connector Documentation](https://docs.confluent.io/cloud/current/connectors/cc-ibmmq-source.html)
+- [ActiveMQ Source Connector Documentation](https://docs.confluent.io/cloud/current/connectors/cc-activemq-source.html)
 - [Flink on Confluent Cloud](https://docs.confluent.io/cloud/current/flink/overview.html)
-- [Kafka Connect Single Message Transformations](https://docs.confluent.io/platform/current/connect/transforms/overview.html)
+- [Confluent Cloud Custom Single Message Transformations](https://docs.confluent.io/cloud/current/connectors/configure-custom-single-message-transforms/quick-start-custom-smt.html)
 
 ## Contributing
 
