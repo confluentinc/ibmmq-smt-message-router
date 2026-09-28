@@ -48,36 +48,32 @@ Route messages using Flink SQL with exactly-once semantics and sub-5 second late
 
 **[See Flink routing solution →](jms-routing-smt/flink-routing/)**
 
-### ⚠️ Alternative: Custom SMT (Partial Solution)
+### ✅ Alternative: Custom SMT (Tested)
 
-Extract nested JMS properties using a **custom SMT** (`JmsPropertyToHeader`) that reads the nested JSON and adds the value as a Kafka header.
+Extract nested JMS properties using a **custom SMT** (`JmsPropertyToHeader`) that reads the nested JSON and adds the value as a Kafka header. Then use the **Confluent-provided `ExtractTopic$Header` SMT** to route based on that header—all at the connector level.
 
-**⚠️ Important:** This custom SMT only provides **property extraction to headers**. Header-based topic routing requires an additional custom SMT (not provided). For a complete, tested routing solution, **use Flink** (recommended above).
+**Why Custom SMT?**
+- ✅ **Sub-second latency** - Routing happens at connector level
+- ✅ **Lower storage costs** - Messages route directly to target topics
+- ✅ **Works in Confluent Cloud** - Tested and working
+- ✅ **Minimal infrastructure** - No separate stream processor needed
+- ✅ **Confluent SMT for routing** - Uses Confluent-provided `ExtractTopic$Header` transform
 
-**Why Custom SMT has limitations:**
-- ⚠️ **Incomplete** - Only extracts properties, doesn't route to different topics
-- ⚠️ **Requires additional development** - Header-based routing SMT not included
-- Standard Kafka Connect SMTs don't support header-based topic routing
-- **Recommendation:** Use Flink for production (tested, working, exactly-once)
-
-**[See custom SMT details →](jms-routing-smt/)** (for header extraction only)
+**[See custom SMT solution →](jms-routing-smt/)**
 
 ### Quick Comparison
 
-| Feature | **Flink (Recommended)** | **Custom SMT (Partial)** |
+| Feature | **Flink** | **Custom SMT** |
 |---------|-----------|----------------|
-| **Processing Semantics** | Exactly-once | N/A (no routing) |
-| **Topic Routing** | ✅ **Complete solution** | ⚠️ **Not included** |
-| **Message Retention** | **Retained in input topic** | Depends on configuration |
-| **Latency** | 1-5 seconds (tested) | N/A |
-| **Confluent Cloud** | Native support | Header extraction only |
+| **Processing Semantics** | Exactly-once | Depends on connector |
+| **Message Retention** | **Retained in input topic** | **Not retained in input topic** |
+| **Latency** | 1-5 seconds (tested) | Sub-second |
+| **Confluent Cloud** | Native support | Tested & working |
 | **Windowing/Aggregation** | Advanced | No |
 | **Infrastructure** | Managed Flink cluster | None (in-connector) |
-| **Best For** | **Production routing** | Header extraction only |
+| **Best For** | Production with audit trail | Direct routing, minimal storage |
 
-**Recommendation:** Use Flink for any routing use case. The custom SMT is incomplete (header extraction only, no routing).
-
-**See [jms-routing-smt/README.md](jms-routing-smt/README.md) for more details.**
+**See [jms-routing-smt/README.md](jms-routing-smt/README.md) for detailed comparison and decision guide.**
 
 ## Architecture
 
@@ -134,23 +130,23 @@ Lower storage costs, no audit trail in input topic
 
 ## When to Use Each Solution
 
-### Choose Flink (Recommended for ALL routing use cases):
-- ✅ **Complete, tested routing solution**
-- ✅ **Exactly-once processing** guarantees
-- ✅ **Messages retained in input topic** for audit/re-processing
-- ✅ **Stateful operations** (aggregations, windowing, joins)
-- ✅ Processing **financial transactions** or critical data
-- ✅ **High throughput** requirements (100K+ msgs/sec)
-- ✅ **Confluent Cloud** (native, fully managed support)
-- ✅ **1-5 second latency** (tested)
+### Choose Flink if:
+- You need **exactly-once processing** guarantees
+- You want **messages retained in input topic** for audit/re-processing
+- You need **stateful operations** (aggregations, windowing, joins)
+- You're processing **financial transactions** or critical data
+- You have **high throughput** requirements (100K+ msgs/sec)
+- You're using **Confluent Cloud** (native, fully managed support)
 
-### Custom SMT is NOT recommended for routing:
-- ⚠️ **Incomplete solution** - Only extracts properties to headers
-- ⚠️ **No topic routing** - Requires additional custom SMT development
-- ⚠️ Standard Kafka Connect SMTs don't support header-based routing
-- **Use case:** Only if you need JMS properties as Kafka headers for other purposes (not routing)
+### Choose Custom SMT if:
+- You want **minimal storage costs** (messages stored once)
+- You need **sub-second latency** at connector level
+- You want **direct routing** without intermediate topic
+- You're running **self-managed Kafka Connect**
+- **Simple routing** is sufficient (no aggregations needed)
+- You don't need audit trail in input topic
 
-**For any routing use case, use Flink.** See: [jms-routing-smt/README.md](jms-routing-smt/README.md#decision-guide)
+**See detailed decision guide:** [jms-routing-smt/README.md](jms-routing-smt/README.md#decision-guide)
 
 ## Prerequisites
 
@@ -194,18 +190,17 @@ This solution works with **any MQ queue that contains messages with JMS properti
 
 **[Full Flink guide →](jms-routing-smt/flink-routing/)**
 
-### Option 2: Custom SMT (Partial - Header Extraction Only)
-
-⚠️ **Note:** This SMT only extracts JMS properties to Kafka headers. It does **not** provide topic routing. For complete routing, use **Option 1: Flink** (recommended).
+### Option 2: Custom SMT (30 minutes)
 
 1. Upload [jms-routing-smt/jms-property-to-header-smt-plugin.zip](jms-routing-smt/jms-property-to-header-smt-plugin.zip) to Confluent Cloud
-2. Add transform to MQ connector:
+2. Add two transforms to MQ connector:
    - `JmsPropertyToHeader$Value` - Extract JMS property to Kafka header
-3. Messages written to configured topic with messageType in headers
+   - `ExtractTopic$Header` - Route based on header value (Confluent-provided)
+3. Messages route directly to target topics
 
-**Result:** JMS properties available as Kafka headers (routing requires additional custom SMT development).
+**Result:** Sub-second routing at connector level, messages not retained in input topic.
 
-**[SMT details →](jms-routing-smt/)** (for reference only - use Flink for routing)
+**[Full SMT guide →](jms-routing-smt/)**
 
 ## Tested Configuration
 
