@@ -1,10 +1,12 @@
 # JMS Property to Header SMT
 
-Custom Kafka Connect Single Message Transform (SMT) to extract nested JMS properties from IBM MQ connector messages and route to different topics.
+Custom Kafka Connect Single Message Transform (SMT) to extract nested JMS properties from JMS Source Connector messages and route to different topics.
+
+**Tested with:** IBM MQ, ActiveMQ Classic, and ActiveMQ Artemis - all use identical nested property structure.
 
 ## Problem
 
-The IBM MQ Source Connector stores JMS properties in a nested JSON structure:
+JMS Source Connectors (IBM MQ, ActiveMQ) store JMS properties in a nested JSON structure:
 
 ```json
 {

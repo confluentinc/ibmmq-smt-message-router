@@ -9,7 +9,8 @@ This solution uses Apache Flink SQL to consume messages from JMS Source Connecto
 **Tested with:**
 - IBM MQ Source Connector (IBM MQ 9.x)
 - ActiveMQ Source Connector (ActiveMQ Classic 6.3.2)
-- Both use identical nested property structure: `properties.messageType.string`
+- ActiveMQ Source Connector (ActiveMQ Artemis 2.40.0)
+- All three providers use identical nested property structure: `properties.messageType.string`
 
 **Why Flink?**
 - ✅ **Exactly-once processing** - No duplicates, guaranteed correctness

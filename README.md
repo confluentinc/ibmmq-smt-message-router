@@ -202,16 +202,22 @@ This solution works with any MQ queue that contains messages with JMS properties
 
 ## Tested Configuration
 
-Both solutions have been tested end-to-end with:
+Both solutions have been tested end-to-end with all three major JMS providers:
+
+**JMS Providers Tested:**
 - **IBM MQ Source Connector** (IBM MQ 9.x) in Confluent Cloud
 - **ActiveMQ Source Connector** (ActiveMQ Classic 6.3.2) in Confluent Cloud
+- **ActiveMQ Source Connector** (ActiveMQ Artemis 2.40.0) in Confluent Cloud
+
+**Test Scenarios:**
 - **Messages with JMS properties** (messageType: PAYMENT, TRANSFER, NOTIFICATION)
 - **Routing to multiple topics** based on messageType value
+- **Both Flink and Custom SMT routing** tested with each provider
 - **Confluent Cloud deployment** (fully managed)
 
-**Verified behavior:** Both IBM MQ and ActiveMQ Classic use the identical nested JMS property structure (`properties.messageType.string`), so the routing solutions work without modification across both providers.
+**Critical Finding:** All three JMS providers (IBM MQ, ActiveMQ Classic, ActiveMQ Artemis) use the **identical nested JMS property structure** (`properties.messageType.string`), so the routing solutions work without modification across all providers.
 
-Performance verified:
+**Performance Verified:**
 - **Flink**: 1-5 seconds end-to-end latency, exactly-once semantics
 - **Custom SMT**: Sub-second latency, messages route directly to target topics
 
@@ -232,7 +238,8 @@ Performance verified:
     └── flink-routing/                 # Flink solution (RECOMMENDED)
         ├── README.md                  # Full Flink deployment guide
         ├── routing.sql                # Flink SQL DDL and routing jobs (IBM MQ)
-        ├── activemq-routing.sql       # Flink SQL DDL and routing jobs (ActiveMQ)
+        ├── activemq-routing.sql       # Flink SQL DDL and routing jobs (ActiveMQ Classic)
+        ├── artemis-routing.sql        # Flink SQL DDL and routing jobs (ActiveMQ Artemis)
         └── java-router/               # Flink Table API (Java option)
 ```
 
