@@ -155,7 +155,7 @@ Verify the message arrives in the `PAYMENT` topic.
 
 ```
 jms-routing-smt/
-├── flink-routing/   # Flink SQL (Confluent Cloud) and Table API job (self-managed)
+├── flink-routing/   # Flink SQL for Confluent Cloud
 ├── src/             # Custom SMT and its unit tests (historical)
 └── README.md        # This file
 ```

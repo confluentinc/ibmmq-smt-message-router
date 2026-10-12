@@ -6,7 +6,7 @@ help:
 	@echo "Available targets:"
 	@echo "  show-args       - Display build arguments"
 	@echo "  init-ci         - Initialize CI environment"
-	@echo "  build           - Build custom SMT plugin and Flink router"
+	@echo "  build           - Build custom SMT plugin"
 	@echo "  test            - Run tests"
 	@echo "  clean           - Clean build artifacts"
 	@echo "  release-ci      - Package the custom connector plugin ZIP"
@@ -29,20 +29,16 @@ init-ci:
 build:
 	@echo "Building custom SMT plugin..."
 	cd jms-routing-smt && mvn -B clean package
-	@echo "Building Flink Table API router..."
-	cd jms-routing-smt/flink-routing/java-router && mvn -B clean package
-	@echo "Build complete: jms-routing-smt/target/*.jar, jms-routing-smt/flink-routing/java-router/target/*.jar"
+	@echo "Build complete: jms-routing-smt/target/*.jar"
 
 test:
 	@echo "Running tests..."
 	cd jms-routing-smt && mvn -B test
-	cd jms-routing-smt/flink-routing/java-router && mvn -B test
 	@echo "Tests complete"
 
 clean:
 	@echo "Cleaning build artifacts..."
 	cd jms-routing-smt && mvn -B clean
-	cd jms-routing-smt/flink-routing/java-router && mvn -B clean
 	@echo "Clean complete"
 
 release-ci:

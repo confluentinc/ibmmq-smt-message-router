@@ -1,6 +1,6 @@
-# Flink Message Routing
+# Flink SQL Message Routing
 
-Route JMS messages from IBM MQ, ActiveMQ Classic or ActiveMQ Artemis to different Kafka topics based on the `messageType` JMS property, using Apache Flink.
+Route JMS messages from IBM MQ, ActiveMQ Classic or ActiveMQ Artemis to different Kafka topics based on the `messageType` JMS property, using Flink SQL on Confluent Cloud.
 
 The JMS source connector writes every message to one input topic (e.g. `ibm.mq.input`). Flink reads that topic and routes each message to its own topic. Messages stay in the input topic, so you keep an audit trail and can replay.
 
@@ -28,9 +28,8 @@ Messages with a missing or unrecognised `messageType` go to `unknown-message-typ
 | `routing.sql` | Confluent Cloud Flink, IBM MQ (`ibm.mq.input`) |
 | `activemq-routing.sql` | Confluent Cloud Flink, ActiveMQ Classic (`activemq.input`) |
 | `artemis-routing.sql` | Confluent Cloud Flink, ActiveMQ Artemis (`artemis.input`) |
-| `java-router/` | Self-managed Flink, Table API job |
 
-## Confluent Cloud for Apache Flink
+## Run on Confluent Cloud for Apache Flink
 
 Prerequisites: a JMS source connector writing to the input topic, and a Flink compute pool.
 
@@ -40,25 +39,6 @@ Prerequisites: a JMS source connector writing to the input topic, and a Flink co
 4. Check the **Jobs** tab for four running jobs, send test messages, and watch the output topics.
 
 Connectivity, security and Schema Registry are configured by Confluent Cloud.
-
-## Self-Managed Flink (Table API)
-
-`java-router/` contains a Flink job built for Flink 1.20 and `flink-connector-kafka` 3.4.x. It reads **plain JSON** (set `output.data.format=JSON` on the connector, not `JSON_SR`) and writes plain JSON. It does not use Schema Registry, and it submits all four routes as a single job.
-
-```bash
-cd jms-routing-smt/flink-routing/java-router
-mvn clean package
-
-flink run -c io.confluent.flink.FlinkMessageRouter \
-  target/flink-message-router-1.0.0.jar \
-  --kafka.bootstrap.servers your-kafka:9092 \
-  --kafka.api.key <api-key> \
-  --kafka.api.secret <api-secret>
-```
-
-Omit the key and secret for an unauthenticated cluster. The Flink distribution must provide the Table planner and `flink-json`; the Kafka connector is bundled in the jar.
-
-The plain `kafka` connector is append-only, so the sink tables have no primary key and the Kafka record key is empty.
 
 ## SQL Building Blocks
 
@@ -143,8 +123,6 @@ Check that the topic has data and that the source table schema matches it.
 **Schema errors** (`NullSchema`, "Schema doesn't match"): delete the subject in Schema Registry and let Flink recreate it, or remove `"type": "null"` fields.
 
 **Jobs running but no output**: check records in/out on the Jobs tab, and look for exceptions in the job details.
-
-**Self-managed job fails to start**: check the Flink logs, the Kafka credentials, and that the Kafka connector version matches your Flink version.
 
 ## Cleanup
 
