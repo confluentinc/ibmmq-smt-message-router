@@ -48,7 +48,8 @@ CREATE TABLE `ibm.mq.input` (
 -- ============================================================================
 -- STEP 2: Create sink tables for each message type
 -- ============================================================================
--- These will write to payment-topic, transfer-topic, notification-topic
+-- These will write to payment-topic, transfer-topic, notification-topic and
+-- unknown-message-type-topic
 -- Schemas will be auto-created in Schema Registry
 
 -- Payment messages sink
@@ -87,17 +88,26 @@ CREATE TABLE `notification-topic` (
   'value.format' = 'json-registry'
 );
 
+-- Unknown / missing messageType sink (dead-letter style)
+CREATE TABLE `unknown-message-type-topic` (
+  messageID STRING NOT NULL,
+  `timestamp` DOUBLE,
+  text STRING,
+  messageType STRING,
+  PRIMARY KEY (messageID) NOT ENFORCED
+) WITH (
+  'connector' = 'confluent',
+  'value.format' = 'json-registry'
+);
+
 -- ============================================================================
 -- STEP 3: Start routing jobs (continuous INSERT statements)
 -- ============================================================================
 -- Each INSERT runs as a continuous streaming job with:
--- - Exactly-once processing semantics
--- - Processing-time routing (messages routed based on arrival time)
+-- - Exactly-once processing (consumers must use isolation.level=read_committed)
+-- - Stateless routing: no event-time or watermarks involved
 -- - Automatic checkpointing
 -- - 1-5 second latency (tested)
---
--- Note: For event-time processing with watermarks (handling late events),
--- see Advanced Features section in README.md
 --
 -- Run each INSERT statement separately - they will run continuously
 
@@ -131,13 +141,25 @@ SELECT
 FROM `ibm.mq.input`
 WHERE properties.messageType.`string` = 'NOTIFICATION';
 
+-- Route everything else (unknown or missing messageType)
+INSERT INTO `unknown-message-type-topic`
+SELECT
+  messageID,
+  `timestamp`,
+  text,
+  COALESCE(properties.messageType.`string`, 'UNKNOWN') AS messageType
+FROM `ibm.mq.input`
+WHERE properties.messageType.`string` IS NULL
+   OR properties.messageType.`string` NOT IN ('PAYMENT', 'TRANSFER', 'NOTIFICATION');
+
 -- ============================================================================
 -- VERIFICATION
 -- ============================================================================
 -- After starting the jobs, check:
--- 1. Jobs tab - should show 3 running jobs
+-- 1. Jobs tab - should show 4 running jobs
 -- 2. Send test messages to IBM MQ
--- 3. Check output topics (payment-topic, transfer-topic, notification-topic)
+-- 3. Check output topics (payment-topic, transfer-topic, notification-topic,
+--    unknown-message-type-topic)
 -- 4. Expect ~1-5 second end-to-end latency
 
 -- Query to see incoming messages (run in a separate session):
@@ -174,6 +196,5 @@ WHERE properties.messageType.`string` = 'NOTIFICATION';
 --
 -- Jobs running but no output:
 -- - Check job metrics in Jobs tab (records in/out)
--- - Verify watermark settings (default is 12 minutes on event time)
 -- - After initial checkpoint, latency should be sub-5 seconds
 -- - Look for exceptions in job details

@@ -6,45 +6,32 @@ help:
 	@echo "Available targets:"
 	@echo "  show-args       - Display build arguments"
 	@echo "  init-ci         - Initialize CI environment"
-	@echo "  build           - Build custom SMT plugin"
+	@echo "  build           - Nothing to build"
 	@echo "  test            - Run tests"
 	@echo "  clean           - Clean build artifacts"
-	@echo "  release-ci      - Release artifacts"
+	@echo "  release-ci      - No release artifacts"
 	@echo "  epilogue-ci     - CI epilogue tasks"
 	@echo "  testbreak-after - Post-test cleanup"
 
 show-args:
 	@echo "Repository: ibmmq-smt-message-router"
 	@echo "Type: JMS Routing Solutions"
-	@echo "Contents: Flink SQL routing + Custom SMT for JMS Source Connectors"
+	@echo "Contents: Flink SQL routing + JSON_PATH SMT docs for JMS Source Connectors"
 
 init-ci:
-	@echo "Initializing CI environment..."
-	@echo "Java version:"
-	@java -version 2>&1 | head -1
-	@echo "Maven version:"
-	@mvn -version 2>&1 | head -1
-	@echo "JAVA_HOME: $$JAVA_HOME"
+	@echo "Nothing to initialize"
 
 build:
-	@echo "Building custom SMT plugin..."
-	cd jms-routing-smt && mvn clean package
-	@echo "Build complete: jms-routing-smt/target/*.jar"
+	@echo "Nothing to build: documentation and Flink SQL only"
 
 test:
-	@echo "Running tests..."
-	cd jms-routing-smt && mvn test
-	@echo "Tests complete"
+	@echo "No tests"
 
 clean:
-	@echo "Cleaning build artifacts..."
-	cd jms-routing-smt && mvn clean
-	rm -rf jms-routing-smt/target
-	@echo "Clean complete"
+	@echo "Nothing to clean"
 
 release-ci:
-	@echo "Releasing artifacts..."
-	@echo "No automated release - plugin JAR in jms-routing-smt/target/"
+	@echo "No release artifacts"
 
 epilogue-ci:
 	@echo "Running CI epilogue tasks..."
