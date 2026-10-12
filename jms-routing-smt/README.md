@@ -1,14 +1,14 @@
 # JMS Message Routing - Detailed Guide
 
-**Discovery (Sept 2026):** Confluent's `ExtractTopic$Value` SMT supports JSON_PATH. No custom code needed.
-
 Route JMS messages to different Kafka topics based on message properties.
 
 **Tested:** IBM MQ, ActiveMQ Classic, ActiveMQ Artemis
 
+Confluent's built-in `ExtractTopic$Value` SMT supports `field.format=JSON_PATH`, so no custom code is needed. See [JSONPATH_DISCOVERY.md](../JSONPATH_DISCOVERY.md) for the test results.
+
 ## Problem
 
-JMS properties are nested in JSON:
+JMS properties are nested in the connector's JSON output:
 
 ```json
 {
@@ -20,83 +20,26 @@ JMS properties are nested in JSON:
 }
 ```
 
-Standard SMTs can't extract `properties.messageType.string`.
-
-## Solutions
-
-### JSON_PATH SMT (Recommended for SMT approach)
-
-Use Confluent's built-in SMT:
-
-```json
-{
-  "transforms": "routeByJsonPath",
-  "transforms.routeByJsonPath.type": "io.confluent.connect.transforms.ExtractTopic$Value",
-  "transforms.routeByJsonPath.field": "$[\"properties\"][\"messageType\"][\"string\"]",
-  "transforms.routeByJsonPath.field.format": "JSON_PATH",
-  "transforms.routeByJsonPath.skip.missing.or.null": "true"
-}
-```
-
-**Flow:** `MQ → Connector with SMT → payment, transfer, notification topics`
-
-**Pros:** Built-in, no custom code, sub-second  
-**Cons:** No input topic
-
-### Custom SMT (Historical)
-
-This repo contains a custom SMT that does the same thing. **Use JSON_PATH instead** - it's simpler.
-
-## Flink vs SMT
-
-### Flink
-```
-MQ → Connector → jms.input → Flink → payment, transfer, notification
-```
-
-**Pros:** Exactly-once, input topic retained, aggregations  
-**Cons:** Needs Flink cluster, 1-5 sec latency
-
-### SMT (JSON_PATH or Custom)
-```
-MQ → Connector with SMT → payment, transfer, notification
-```
-
-**Pros:** No extra infrastructure, sub-second, simpler  
-**Cons:** No input topic, no aggregations
-
-### Comparison
-
-| | **Flink** | **JSON_PATH SMT** | **Custom SMT** |
-|-|-----------|-------------------|----------------|
-| **Input topic?** | Yes | No | No |
-| **Exactly-once?** | Yes | Connector-dependent | Connector-dependent |
-| **Latency** | 1-5 sec | Sub-second | Sub-second |
-| **Setup** | 15 min | 5 min | 30 min |
-| **Custom code?** | No | No | Yes |
-| **Aggregations?** | Yes | No | No |
-
-[See Flink guide →](flink-routing/)
-- ✅ Sub-second latency (routing at connector level)
-- ❌ No audit trail in input topic
-- ❌ Cannot re-process from original input
-- ❌ Cannot have multiple routing strategies on same input
-
-**Choose based on your requirements:**
-- Need audit trail or re-processing? → **Apache Flink**
-- Want minimal storage and direct routing? → **JSON_PATH SMT**
+Most SMTs can't extract `properties.messageType.string` directly.
 
 ## Which to Use?
 
-**Flink:** Need input topic for audit/replay? Need aggregations? → Use Flink  
-**JSON_PATH SMT:** Simple routing, don't need input topic? → Use JSON_PATH SMT  
-**Custom SMT:** Use JSON_PATH SMT instead (simpler, same result)
+| | **Flink** | **JSON_PATH SMT** | **Custom SMT** |
+|-|-----------|-------------------|----------------|
+| Input topic retained (audit, replay) | Yes | No | No |
+| Delivery | Exactly-once on Confluent Cloud | Connector-dependent | Connector-dependent |
+| Latency | 1-5 sec | Sub-second | Sub-second |
+| Setup | ~15 min | ~5 min | ~30 min |
+| Custom code | No | No | Yes |
+| Aggregations | Yes | No | No |
 
-## Configuration
+- Need an audit trail, replay, several routing strategies on one input, or aggregations? → **[Flink](flink-routing/)**
+- Want minimal storage and direct routing? → **JSON_PATH SMT**
+- **Custom SMT**: superseded by JSON_PATH. Kept for reference only.
 
-### JSON_PATH SMT
+## JSON_PATH SMT
 
-Add to your connector:
+Add to your connector config:
 
 ```json
 {
@@ -108,89 +51,76 @@ Add to your connector:
 }
 ```
 
-The SMT extracts `properties.messageType.string` and uses it as the topic name.
+The SMT extracts `properties.messageType.string` and uses it as the topic name, so a `messageType` of `PAYMENT` goes to the topic `PAYMENT`. With `skip.missing.or.null=true`, records without the property stay on the connector's `kafka.topic`.
 
-See [main README](../README.md#configuration) for full connector configs.
+See the [main README](../README.md#configuration) for full connector configs.
 
-## Custom SMT Configuration (Historical)
+## Flink
 
-**Note:** This approach is superseded by JSON_PATH SMT above. Use JSON_PATH instead.
+```
+MQ → Connector → ibm.mq.input → Flink → payment-topic, transfer-topic, notification-topic
+```
 
-Add these transforms to your IBM MQ Source Connector configuration:
+Run the SQL from [flink-routing/routing.sql](flink-routing/routing.sql). [Full guide →](flink-routing/)
+
+## Custom SMT (Historical)
+
+`JmsPropertyToHeader$Value` copies `properties.<name>.string` into a Kafka header. Combined with `ExtractTopic$Header` it routes by header value. Use JSON_PATH instead; it does the same in one transform.
+
+### Configuration
 
 ```json
 {
   "connector.class": "io.confluent.connect.ibm.mq.IbmMQSourceConnector",
   "kafka.topic": "ibm.mq.input",
   "jms.destination.name": "DEV.QUEUE.1",
-  
+
   "transforms": "copyMessageType,routeByMessageType",
-  
+
   "transforms.copyMessageType.type": "io.confluent.connect.transforms.JmsPropertyToHeader$Value",
   "transforms.copyMessageType.property.name": "messageType",
   "transforms.copyMessageType.header.name": "messageType",
   "transforms.copyMessageType.skip.missing": "true",
-  
+
   "transforms.routeByMessageType.type": "io.confluent.connect.transforms.ExtractTopic$Header",
-  "transforms.routeByMessageType.header": "messageType",
-  "transforms.routeByMessageType.topic.format": "${topic}-topic",
+  "transforms.routeByMessageType.field": "messageType",
   "transforms.routeByMessageType.skip.missing.or.null": "true"
 }
 ```
 
-### SMT Parameters
+`ExtractTopic$Header` uses the whole header value as the topic name (`PAYMENT` → topic `PAYMENT`). It has no `topic.format` option, and only `field.format=PLAIN` is supported for headers.
 
-**JmsPropertyToHeader Parameters:**
+### Parameters
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `property.name` | String | Required | Name of the JMS property to extract (e.g., "messageType") |
-| `header.name` | String | Required | Name of the Kafka header to create |
-| `skip.missing` | Boolean | true | If true, skip records where the property is missing or null. If false, throw an error. |
-
-**ExtractTopic$Header Parameters:** (Confluent-provided SMT)
+**JmsPropertyToHeader:**
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `header` | String | Required | Name of the header to extract (should match `header.name` above) |
-| `topic.format` | String | `${topic}` | Format for the destination topic. Use `${topic}` as placeholder for header value |
-| `skip.missing.or.null` | Boolean | false | Skip records where header is missing or null |
+| `property.name` | String | Required | JMS property to extract (e.g. `messageType`) |
+| `header.name` | String | Required | Kafka header to create |
+| `skip.missing` | Boolean | `true` | If true, pass records through unchanged when the property is missing or null. If false, fail with a `DataException`. |
 
-### Processing Flow
+**ExtractTopic$Header** (Confluent-provided):
 
-**Input message:**
-```json
-{
-  "text": "{\"transactionId\":\"PAY-001\",\"amount\":5000}",
-  "properties": {
-    "messageType": {
-      "propertyType": "string",
-      "string": "PAYMENT"
-    }
-  }
-}
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `field` | String | Required | Name of the header to read (matches `header.name` above) |
+| `skip.missing.or.null` | Boolean | `false` | Skip records where the header is missing or null |
+
+Only the `$Value` variant exists. The transform returns a new record with a copy of the headers and leaves the input record unchanged. It handles both schema-based (`Struct`) and schemaless (`Map`) values.
+
+### Build and test
+
+```bash
+mvn clean package   # runs the unit tests, output: target/jms-property-to-header-smt-1.0.0.jar
 ```
 
-**Step 1: JmsPropertyToHeader SMT** (custom, provided in this repository)
-- Extracts: `properties.messageType.string = "PAYMENT"`
-- Adds Kafka header: `messageType: "PAYMENT"`
-- Message value: unchanged
+The jar is built by CI; it is no longer committed to the repository.
 
-**Step 2: ExtractTopic$Header SMT** (Confluent-provided)
-- Reads header: `messageType = "PAYMENT"`
-- Applies format: `"${topic}-topic"` → `"PAYMENT-topic"`
-- Routes message to: `PAYMENT-topic`
+### Deploy to Confluent Cloud
 
-**Result:**
-- Topic: `PAYMENT-topic` (or `payment-topic` if header value is lowercase)
-- Headers: `messageType: "PAYMENT"`
-- Value: Original message unchanged
+Custom SMTs on Confluent Cloud need a custom connector plugin:
 
-## Deployment to Confluent Cloud
-
-### Option 1: Custom Connector Plugin (Recommended for Production)
-
-1. Create a connector plugin ZIP:
 ```bash
 mkdir -p kafka-connect-jms-smt/lib
 cp target/jms-property-to-header-smt-1.0.0.jar kafka-connect-jms-smt/lib/
@@ -198,78 +128,20 @@ cd kafka-connect-jms-smt
 zip -r ../jms-property-to-header-smt-plugin.zip .
 ```
 
-2. Upload to Confluent Cloud:
-   - Go to Confluent Cloud UI → Connectors → Custom connector plugins
-   - Upload `jms-property-to-header-smt-plugin.zip`
-   - Add to your connector configuration
+Upload the ZIP under **Connectors → Custom connector plugins** and reference the plugin from your connector.
 
-## Quick Start
+### Deploy to self-managed Connect
 
-### Flink (15 minutes)
-
-1. Open Flink SQL in Confluent Cloud
-2. Run SQL from [flink-routing/routing.sql](flink-routing/routing.sql)
-
-[Full guide →](flink-routing/)
-
-### JSON_PATH SMT (5 minutes)
-
-Add to connector config:
-
-```json
-{
-  "transforms": "routeByJsonPath",
-  "transforms.routeByJsonPath.type": "io.confluent.connect.transforms.ExtractTopic$Value",
-  "transforms.routeByJsonPath.field": "$[\"properties\"][\"messageType\"][\"string\"]",
-  "transforms.routeByJsonPath.field.format": "JSON_PATH",
-  "transforms.routeByJsonPath.skip.missing.or.null": "true"
-}
-```
-
-### Custom SMT (Historical)
-
-Build JAR and upload. **Use JSON_PATH instead** - it's simpler.
-
----
-
-## Custom SMT Reference (Historical)
-
-**Note:** Use JSON_PATH SMT instead. This section kept for reference.
-
-Build:
-```bash
-mvn clean package
-```
-
-Output: `target/jms-property-to-header-smt-1.0.0.jar`
-
-Upload to Confluent Cloud as custom plugin.
-
-1. Copy JAR to Kafka Connect plugin path:
 ```bash
 mkdir -p /usr/local/share/kafka/plugins/jms-property-to-header-smt
 cp target/jms-property-to-header-smt-1.0.0.jar /usr/local/share/kafka/plugins/jms-property-to-header-smt/
 ```
 
-2. Update worker configuration:
-```properties
-plugin.path=/usr/local/share/kafka/plugins
-```
-
-3. Restart Kafka Connect and configure your connector with the transform
-
-## What's in This Repo
-
-```
-jms-routing-smt/
-├── flink-routing/          # Flink SQL routing (recommended)
-├── src/                    # Custom SMT code (historical)
-└── README.md              # This file
-```
+Set `plugin.path=/usr/local/share/kafka/plugins` in the worker configuration and restart Connect. The jar is compiled against Kafka 4.x and needs Java 11+; use a Connect runtime of the same major version.
 
 ## Testing
 
-Send JMS message with property:
+Send a JMS message with the property:
 
 ```java
 TextMessage msg = session.createTextMessage("{\"transactionId\":\"PAY-001\"}");
@@ -277,5 +149,13 @@ msg.setStringProperty("messageType", "PAYMENT");
 producer.send(msg);
 ```
 
-Verify message routed to `PAYMENT` topic.
+Verify the message arrives in the `PAYMENT` topic.
 
+## Repository layout
+
+```
+jms-routing-smt/
+├── flink-routing/   # Flink SQL (Confluent Cloud) and Table API job (self-managed)
+├── src/             # Custom SMT and its unit tests (historical)
+└── README.md        # This file
+```

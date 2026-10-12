@@ -2,131 +2,108 @@ package io.confluent.flink;
 
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.table.api.EnvironmentSettings;
-import org.apache.flink.table.api.Table;
+import org.apache.flink.table.api.StatementSet;
 import org.apache.flink.table.api.bridge.java.StreamTableEnvironment;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
- * Flink job to route IBM MQ messages to different Kafka topics based on JMS messageType property.
+ * Self-managed Flink job that routes JMS messages to different Kafka topics based on the
+ * JMS {@code messageType} property.
  *
- * This job:
- * 1. Reads from ibm.mq.input topic
- * 2. Extracts properties.messageType.string from nested JSON
- * 3. Routes to payment-topic, transfer-topic, or notification-topic based on messageType
+ * <p>This job:
+ * <ol>
+ *   <li>Reads plain JSON from the {@code ibm.mq.input} topic (connector {@code output.data.format=JSON})</li>
+ *   <li>Extracts {@code properties.messageType.string} from the nested JSON</li>
+ *   <li>Routes to payment-topic, transfer-topic or notification-topic; anything else (including
+ *       a missing property) goes to unknown-message-type-topic</li>
+ * </ol>
  *
- * Usage:
- *   flink run -c io.confluent.flink.FlinkMessageRouter target/flink-message-router-1.0.0.jar \
- *     --kafka.bootstrap.servers localhost:9092 \
- *     --kafka.api.key <api-key> \
- *     --kafka.api.secret <api-secret>
+ * <p>All four routes are submitted as a single job (one read of the input topic). For Confluent
+ * Cloud for Apache Flink use the SQL files instead; they use the managed {@code confluent}
+ * connector and Schema Registry.
+ *
+ * <pre>
+ * flink run -c io.confluent.flink.FlinkMessageRouter target/flink-message-router-1.0.0.jar \
+ *   --kafka.bootstrap.servers localhost:9092 \
+ *   --kafka.api.key &lt;api-key&gt; \
+ *   --kafka.api.secret &lt;api-secret&gt;
+ * </pre>
  */
 public class FlinkMessageRouter {
 
+    private static final String INPUT_TOPIC = "ibm.mq.input";
+    private static final String CONSUMER_GROUP = "flink-mq-router";
+
+    private static final String[][] ROUTES = {
+        // table name, topic, messageType value
+        {"payment_topic", "payment-topic", "PAYMENT"},
+        {"transfer_topic", "transfer-topic", "TRANSFER"},
+        {"notification_topic", "notification-topic", "NOTIFICATION"},
+    };
+    private static final String UNKNOWN_TABLE = "unknown_message_type_topic";
+    private static final String UNKNOWN_TOPIC = "unknown-message-type-topic";
+
     public static void main(String[] args) throws Exception {
-        // Parse command line arguments
         String bootstrapServers = getParam(args, "--kafka.bootstrap.servers", "localhost:9092");
         String apiKey = getParam(args, "--kafka.api.key", "");
         String apiSecret = getParam(args, "--kafka.api.secret", "");
 
-        // Set up Flink execution environment
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-        EnvironmentSettings settings = EnvironmentSettings.newInstance().inStreamingMode().build();
-        StreamTableEnvironment tableEnv = StreamTableEnvironment.create(env, settings);
+        // Checkpointing is required for the Kafka sink to commit; EXACTLY_ONCE delivery additionally
+        // needs 'sink.delivery-guarantee' = 'exactly-once' and a transactional id prefix.
+        env.enableCheckpointing(60000);
+        StreamTableEnvironment tableEnv = StreamTableEnvironment.create(
+                env, EnvironmentSettings.newInstance().inStreamingMode().build());
 
-        // Enable checkpointing for exactly-once semantics
-        env.enableCheckpointing(60000); // Checkpoint every 60 seconds
+        String security = securityOptions(apiKey, apiSecret);
 
-        // Build SASL configuration if API key is provided
-        String saslConfig = "";
-        if (!apiKey.isEmpty() && !apiSecret.isEmpty()) {
-            saslConfig = String.format(
-                "'properties.security.protocol' = 'SASL_SSL'," +
-                "'properties.sasl.mechanism' = 'PLAIN'," +
-                "'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.plain.PlainLoginModule required username=\"%s\" password=\"%s\";',",
-                apiKey, apiSecret
-            );
-        }
-
-        // Create source table for IBM MQ input
-        String createSourceTable = String.format(
+        tableEnv.executeSql(
             "CREATE TABLE ibm_mq_input (" +
             "  `messageID` STRING," +
             "  `timestamp` DOUBLE," +
-            "  `properties` ROW<" +
-            "    `messageType` ROW<" +
-            "      `propertyType` STRING," +
-            "      `string` STRING" +
-            "    >" +
-            "  >," +
-            "  `text` STRING," +
-            "  `proc_time` AS PROCTIME()" +
+            "  `properties` ROW<`messageType` ROW<`propertyType` STRING, `string` STRING>>," +
+            "  `text` STRING" +
             ") WITH (" +
             "  'connector' = 'kafka'," +
-            "  'topic' = 'ibm.mq.input'," +
-            "  'properties.bootstrap.servers' = '%s'," +
-            "  'properties.group.id' = 'flink-mq-router'," +
+            "  'topic' = '" + INPUT_TOPIC + "'," +
+            "  'properties.bootstrap.servers' = '" + escape(bootstrapServers) + "'," +
+            "  'properties.group.id' = '" + CONSUMER_GROUP + "'," +
             "  'scan.startup.mode' = 'latest-offset'," +
-            "  'value.format' = 'json-registry'," +
+            "  'format' = 'json'," +
             "  'json.fail-on-missing-field' = 'false'," +
             "  'json.ignore-parse-errors' = 'true'" +
-            "  %s" +
-            ")",
-            bootstrapServers,
-            saslConfig.isEmpty() ? "" : "," + saslConfig
-        );
-        tableEnv.executeSql(createSourceTable);
+            security +
+            ")");
 
-        // Create sink tables for each message type
-        createSinkTable(tableEnv, "payment_topic", "payment-topic", bootstrapServers, saslConfig);
-        createSinkTable(tableEnv, "transfer_topic", "transfer-topic", bootstrapServers, saslConfig);
-        createSinkTable(tableEnv, "notification_topic", "notification-topic", bootstrapServers, saslConfig);
-        createSinkTable(tableEnv, "unknown_message_type_topic", "unknown-message-type-topic", bootstrapServers, saslConfig);
+        StatementSet routes = tableEnv.createStatementSet();
 
-        // Route PAYMENT messages
-        Table paymentMessages = tableEnv.sqlQuery(
-            "SELECT messageID, `timestamp`, text, properties.messageType.`string` AS messageType " +
-            "FROM ibm_mq_input " +
-            "WHERE properties.messageType.`string` = 'PAYMENT'"
-        );
-        tableEnv.createTemporaryView("payment_messages", paymentMessages);
-        tableEnv.executeSql("INSERT INTO payment_topic SELECT * FROM payment_messages");
+        for (String[] route : ROUTES) {
+            createSinkTable(tableEnv, route[0], route[1], bootstrapServers, security);
+            routes.addInsertSql(
+                "INSERT INTO " + route[0] + " " +
+                "SELECT messageID, `timestamp`, text, properties.messageType.`string` AS messageType " +
+                "FROM ibm_mq_input " +
+                "WHERE properties.messageType.`string` = '" + route[2] + "'");
+        }
 
-        // Route TRANSFER messages
-        Table transferMessages = tableEnv.sqlQuery(
-            "SELECT messageID, `timestamp`, text, properties.messageType.`string` AS messageType " +
-            "FROM ibm_mq_input " +
-            "WHERE properties.messageType.`string` = 'TRANSFER'"
-        );
-        tableEnv.createTemporaryView("transfer_messages", transferMessages);
-        tableEnv.executeSql("INSERT INTO transfer_topic SELECT * FROM transfer_messages");
-
-        // Route NOTIFICATION messages
-        Table notificationMessages = tableEnv.sqlQuery(
-            "SELECT messageID, `timestamp`, text, properties.messageType.`string` AS messageType " +
-            "FROM ibm_mq_input " +
-            "WHERE properties.messageType.`string` = 'NOTIFICATION'"
-        );
-        tableEnv.createTemporaryView("notification_messages", notificationMessages);
-        tableEnv.executeSql("INSERT INTO notification_topic SELECT * FROM notification_messages");
-
-        // Route unknown message types
-        Table unknownMessages = tableEnv.sqlQuery(
+        createSinkTable(tableEnv, UNKNOWN_TABLE, UNKNOWN_TOPIC, bootstrapServers, security);
+        routes.addInsertSql(
+            "INSERT INTO " + UNKNOWN_TABLE + " " +
             "SELECT messageID, `timestamp`, text, " +
-            "COALESCE(properties.messageType.`string`, 'UNKNOWN') AS messageType " +
+            "  COALESCE(properties.messageType.`string`, 'UNKNOWN') AS messageType " +
             "FROM ibm_mq_input " +
             "WHERE properties.messageType.`string` IS NULL " +
-            "   OR (properties.messageType.`string` <> 'PAYMENT' " +
-            "       AND properties.messageType.`string` <> 'TRANSFER' " +
-            "       AND properties.messageType.`string` <> 'NOTIFICATION')"
-        );
-        tableEnv.createTemporaryView("unknown_messages", unknownMessages);
-        tableEnv.executeSql("INSERT INTO unknown_message_type_topic SELECT * FROM unknown_messages");
+            "   OR properties.messageType.`string` NOT IN ('PAYMENT', 'TRANSFER', 'NOTIFICATION')");
 
-        System.out.println("Flink Message Router started successfully!");
-        System.out.println("Routing messages from ibm.mq.input to:");
-        System.out.println("  - payment-topic");
-        System.out.println("  - transfer-topic");
-        System.out.println("  - notification-topic");
-        System.out.println("  - unknown-message-type-topic");
+        routes.execute();
+
+        System.out.println("Flink Message Router submitted. Routing " + INPUT_TOPIC + " to:");
+        for (String[] route : ROUTES) {
+            System.out.println("  - " + route[1]);
+        }
+        System.out.println("  - " + UNKNOWN_TOPIC);
     }
 
     private static void createSinkTable(
@@ -134,29 +111,41 @@ public class FlinkMessageRouter {
             String tableName,
             String topicName,
             String bootstrapServers,
-            String saslConfig) {
+            String security) {
 
-        String createSinkTable = String.format(
-            "CREATE TABLE %s (" +
-            "  `messageID` STRING NOT NULL," +
+        // The plain 'kafka' connector is append-only and does not accept a PRIMARY KEY.
+        tableEnv.executeSql(
+            "CREATE TABLE " + tableName + " (" +
+            "  `messageID` STRING," +
             "  `timestamp` DOUBLE," +
             "  `text` STRING," +
-            "  `messageType` STRING," +
-            "  PRIMARY KEY (`messageID`) NOT ENFORCED" +
+            "  `messageType` STRING" +
             ") WITH (" +
             "  'connector' = 'kafka'," +
-            "  'topic' = '%s'," +
-            "  'properties.bootstrap.servers' = '%s'," +
-            "  'value.format' = 'json-registry'," +
-            "  'sink.partitioner' = 'default'" +
-            "  %s" +
-            ")",
-            tableName,
-            topicName,
-            bootstrapServers,
-            saslConfig.isEmpty() ? "" : "," + saslConfig
-        );
-        tableEnv.executeSql(createSinkTable);
+            "  'topic' = '" + topicName + "'," +
+            "  'properties.bootstrap.servers' = '" + escape(bootstrapServers) + "'," +
+            "  'format' = 'json'" +
+            security +
+            ")");
+    }
+
+    /** Returns extra WITH options (each prefixed by a comma), or "" when no credentials are set. */
+    private static String securityOptions(String apiKey, String apiSecret) {
+        if (apiKey.isEmpty() || apiSecret.isEmpty()) {
+            return "";
+        }
+        List<String> options = new ArrayList<>();
+        options.add("'properties.security.protocol' = 'SASL_SSL'");
+        options.add("'properties.sasl.mechanism' = 'PLAIN'");
+        String jaas = "org.apache.kafka.common.security.plain.PlainLoginModule required username=\""
+                + apiKey + "\" password=\"" + apiSecret + "\";";
+        options.add("'properties.sasl.jaas.config' = '" + escape(jaas) + "'");
+        return "," + String.join(",", options);
+    }
+
+    /** Escapes a value for use inside a single-quoted Flink SQL string literal. */
+    private static String escape(String value) {
+        return value.replace("'", "''");
     }
 
     private static String getParam(String[] args, String name, String defaultValue) {
