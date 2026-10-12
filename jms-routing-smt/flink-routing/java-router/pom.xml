@@ -89,7 +89,8 @@
                         <configuration>
                             <artifactSet>
                                 <excludes>
-                                    <exclude>org.apache.flink:flink-*</exclude>
+                                    <!-- Provided-scope Flink and slf4j artifacts are already left out of the jar.
+                                         flink-connector-kafka and its dependencies must be bundled. -->
                                     <exclude>org.slf4j:*</exclude>
                                 </excludes>
                             </artifactSet>
