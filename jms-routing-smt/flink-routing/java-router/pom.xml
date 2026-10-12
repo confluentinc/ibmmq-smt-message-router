@@ -10,7 +10,7 @@
     <packaging>jar</packaging>
 
     <name>Flink MQ Message Router</name>
-    <description>Route IBM MQ messages to different Kafka topics using Flink Table API</description>
+    <description>Route JMS messages to different Kafka topics using the Flink Table API (self-managed Flink)</description>
 
     <properties>
         <maven.compiler.source>11</maven.compiler.source>
@@ -45,14 +45,15 @@
         <dependency>
             <groupId>org.apache.flink</groupId>
             <artifactId>flink-connector-kafka</artifactId>
-            <version>3.0.2-1.18</version>
+            <version>3.4.0-1.20</version>
         </dependency>
 
-        <!-- JSON format -->
+        <!-- JSON format (provided by the Flink distribution at runtime) -->
         <dependency>
             <groupId>org.apache.flink</groupId>
             <artifactId>flink-json</artifactId>
             <version>${flink.version}</version>
+            <scope>provided</scope>
         </dependency>
 
         <!-- Logging -->
@@ -88,7 +89,8 @@
                         <configuration>
                             <artifactSet>
                                 <excludes>
-                                    <exclude>org.apache.flink:flink-*</exclude>
+                                    <!-- Provided-scope Flink and slf4j artifacts are already left out of the jar.
+                                         flink-connector-kafka and its dependencies must be bundled. -->
                                     <exclude>org.slf4j:*</exclude>
                                 </excludes>
                             </artifactSet>
