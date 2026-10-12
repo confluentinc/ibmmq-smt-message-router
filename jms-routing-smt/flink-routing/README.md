@@ -98,17 +98,17 @@ CREATE TABLE `ibm.mq.input` (
 );
 ```
 
-## Flink vs the SMT Alternatives
+## Flink SQL vs the JSON_PATH SMT
 
-| | **Flink** | **JSON_PATH SMT** (built in) | **Custom SMT** (historical) |
-|-|-----------|------------------------------|-----------------------------|
-| Input topic retained | Yes | No | No |
-| Delivery | Exactly-once on Confluent Cloud | Connector-dependent | Connector-dependent |
-| Latency | 1-5 sec | Sub-second | Sub-second |
-| Extra infrastructure | Flink compute pool | None | Custom connector plugin |
-| Aggregations / joins | Yes | No | No |
+| | **Flink SQL** | **JSON_PATH SMT** |
+|-|---------------|-------------------|
+| Input topic retained | Yes | No |
+| Delivery | Exactly-once on Confluent Cloud | Connector-dependent |
+| Latency | 1-5 sec | Sub-second |
+| Extra infrastructure | Flink compute pool | None |
+| Aggregations / joins | Yes | No |
 
-Use Flink when you need the input topic for audit or replay, or any stateful processing. For simple routing, use the [JSON_PATH SMT](../README.md); it needs no extra infrastructure. The custom SMT is kept for reference only.
+Use Flink when you need the input topic for audit or replay, or any stateful processing. For simple routing, use the [JSON_PATH SMT](../README.md); it needs no extra infrastructure.
 
 ## Troubleshooting
 

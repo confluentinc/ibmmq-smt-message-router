@@ -1,35 +1,12 @@
 # JSON_PATH Discovery - Simplified JMS Routing
 
 **Tested:** September 2026  
-**Discovery:** Confluent's `ExtractTopic$Value` SMT supports `field.format=JSON_PATH`, eliminating the need for custom SMTs.
+**Discovery:** Confluent's `ExtractTopic$Value` SMT supports `field.format=JSON_PATH`, so no custom SMT is needed.
 
 ## Summary
 
-While building a custom SMT to extract nested JMS properties (`properties.messageType.string`) and route messages, we discovered that Confluent's built-in `ExtractTopic$Value` transform already supports JSON_PATH expressions for nested field extraction.
+Confluent's built-in `ExtractTopic$Value` transform supports JSON_PATH expressions, so nested JMS properties such as `properties.messageType.string` can be used to route messages with a single built-in SMT and no custom code.
 
-**This means:** A single built-in SMT can do what previously required a custom SMT + standard SMT combination.
-
-## Comparison
-
-### Old Approach (Custom SMT)
-```json
-{
-  "transforms": "copyMessageType,routeByMessageType",
-  "transforms.copyMessageType.type": "io.confluent.connect.transforms.JmsPropertyToHeader$Value",
-  "transforms.copyMessageType.property.name": "messageType",
-  "transforms.copyMessageType.header.name": "messageType",
-  "transforms.copyMessageType.skip.missing": "true",
-  "transforms.routeByMessageType.type": "io.confluent.connect.transforms.ExtractTopic$Header",
-  "transforms.routeByMessageType.field": "messageType",
-  "transforms.routeByMessageType.skip.missing.or.null": "true"
-}
-```
-- ❌ Requires custom SMT plugin upload
-- ❌ Two transforms in chain
-- ❌ More complex configuration
-- ❌ Custom code to maintain
-
-### New Approach (JSON_PATH)
 ```json
 {
   "transforms": "routeByJsonPath",
@@ -39,10 +16,10 @@ While building a custom SMT to extract nested JMS properties (`properties.messag
   "transforms.routeByJsonPath.skip.missing.or.null": "true"
 }
 ```
-- ✅ Built-in Confluent SMT (no custom code)
-- ✅ Single transform
-- ✅ Simpler configuration
-- ✅ Works in Confluent Cloud out-of-the-box
+
+- Built-in Confluent SMT, no custom plugin upload
+- Single transform
+- Works in Confluent Cloud out of the box
 
 ## Test Results
 
@@ -107,14 +84,13 @@ Sent 12 messages:
 
 ## Recommendations
 
-1. **Apache Flink**: when you need the input topic for audit or replay, or stateful processing.
+1. **Flink SQL**: when you need the input topic for audit or replay, or stateful processing.
 2. **JSON_PATH SMT**: simple routing with no input topic and no custom code.
-3. **Custom SMT**: superseded by JSON_PATH; kept for reference only.
 
 ## References
 
 - **Confluent ExtractTopic Documentation:** https://docs.confluent.io/cloud/current/connectors/transforms/extracttopic.html
-- **JSON path support:** `field.format=JSON_PATH` enables nested extraction (`$Value` only; `$Header` supports `PLAIN` only)
+- **JSON path support:** `field.format=JSON_PATH` enables nested extraction (`$Value` only)
 
 ## Conclusion
 

@@ -4,12 +4,10 @@
 
 ### Features and Fixes
 
-- `JmsPropertyToHeader` SMT: return a new record instead of mutating the input, fail with `DataException` when `skip.missing=false`, no longer swallow errors, and add unit tests.
-- Removed the self-managed Flink Table API router (`java-router/`); the supported options are Confluent Cloud Flink SQL and the JSON_PATH SMT.
-- Flink SQL files: route unknown or missing `messageType` to a separate topic, matching the Java router.
-- Documentation: correct `ExtractTopic$Header` configuration (`field`, no `topic.format`), remove contradictory and untested claims, and consolidate the SMT and Flink guides.
-- The prebuilt `jms-property-to-header-smt-plugin.zip` is no longer committed; `make release-ci` builds it.
+- Removed the self-managed Flink Table API router and the custom `JmsPropertyToHeader` SMT (with its plugin ZIP and Maven build). The supported options are Confluent Cloud Flink SQL and the built-in JSON_PATH SMT.
+- Flink SQL files: route unknown or missing `messageType` to a separate topic instead of dropping it.
+- Documentation: consolidated the SMT and Flink guides, removed contradictory and untested claims.
 
 ## v0.0.0 - Initial release
 
-- JMS message routing with Flink SQL, a custom SMT, and the built-in JSON_PATH SMT.
+- JMS message routing with Flink SQL and the built-in JSON_PATH SMT.
