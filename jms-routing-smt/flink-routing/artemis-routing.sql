@@ -57,6 +57,18 @@ CREATE TABLE `artemis-notification` (
   'value.format' = 'json-registry'
 );
 
+-- Unknown / missing messageType sink (dead-letter style)
+CREATE TABLE `artemis-unknown` (
+  messageID STRING NOT NULL,
+  `timestamp` DOUBLE,
+  text STRING,
+  messageType STRING,
+  PRIMARY KEY (messageID) NOT ENFORCED
+) WITH (
+  'connector' = 'confluent',
+  'value.format' = 'json-registry'
+);
+
 -- STEP 3: Start routing jobs
 -- Route PAYMENT messages
 INSERT INTO `artemis-payment`
@@ -87,3 +99,14 @@ SELECT
   properties.messageType.`string` AS messageType
 FROM `artemis.input`
 WHERE properties.messageType.`string` = 'NOTIFICATION';
+
+-- Route everything else (unknown or missing messageType)
+INSERT INTO `artemis-unknown`
+SELECT
+  messageID,
+  `timestamp`,
+  text,
+  COALESCE(properties.messageType.`string`, 'UNKNOWN') AS messageType
+FROM `artemis.input`
+WHERE properties.messageType.`string` IS NULL
+   OR properties.messageType.`string` NOT IN ('PAYMENT', 'TRANSFER', 'NOTIFICATION');
